@@ -1,0 +1,15 @@
+# 忽略 .vscode 文件夹中的所有内容
+.vscode/
+# 忽略编译生成的文件
+*.exe
+*.obj
+*.o
+*.out
+*.a
+*.so
+*.dll
+*.lib
+# 忽略备份文件
+*.bak
+*.tmp
+*.swp
