@@ -1,3 +1,5 @@
+#pragma once
+
 #include <iostream>
 #include <string>
 #include <vector>
@@ -7,7 +9,10 @@
 #include <stack>
 #include <list>
 #include <algorithm>
-#include "./interupt.h"
+#include <mutex>
+#include <atomic>
+#include <cstdint>
+
 
 struct test{
     int i;
