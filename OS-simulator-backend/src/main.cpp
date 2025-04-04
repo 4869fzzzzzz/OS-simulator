@@ -1,6 +1,6 @@
 #include "../include/headfile.h"
 #include "../include/interrupt.h"
-//
+
 int main(){
     struct test t;
     t.i=10086;
