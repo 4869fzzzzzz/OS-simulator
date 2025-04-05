@@ -12,6 +12,7 @@
 #include <mutex>
 #include <atomic>
 #include <cstdint>
+#include <bitset>
 
 
 struct test{
