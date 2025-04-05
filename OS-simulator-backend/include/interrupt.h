@@ -11,7 +11,7 @@ enum class InterruptType { //枚举中断类型-类型的数值用于标注在�
     NON_MASKABLE, //不可屏蔽中断界限
     PAGEFAULT,
     TEST,
-    ERROR
+    MERROR
 };
 
 struct Interrupt {
@@ -36,6 +36,9 @@ struct InterruptVector {
         handler = mhandler;
         priority = pri;
     }
+    InterruptVector() : handler(nullptr), priority(0) {} 
+    
+
 };
 
 extern InterruptVector InterruptVectorTable[InterruptVectorTableSize]; //中断向量表
@@ -55,8 +58,9 @@ extern std::priority_queue<Interrupt, std::vector<Interrupt>, InterruptComparato
 extern std::atomic<uint16_t> valid; //valid的每个二进制位代表对应的中断类型是否有效
 extern std::atomic<bool> timerInterruptValid; //时钟中断是否有效标志,时钟在单独的线程运行，这里仅控制时钟是否产生中断，不能控制时钟线程是否存在
 extern std::atomic<bool> stopTimerFlag; //直接停止时钟中断线程
-
-
+extern std::atomic<bool> handleFlag;
+extern std::atomic<long long> time_cnt;
+extern std::thread th[2];
 
 
 //设置中断屏蔽函数
@@ -75,7 +79,13 @@ class InterruptTool { //操作的中断的工具函数--注意仅可操作可屏
 void raiseInterrupt(InterruptType t, int device_id, int value); //产生一个中断
 void handleInterrupt(); //处理队列中产生的中断
 
+void delay(int timeout_ms);
+void TimeThread(int interval);
+char* timeToChar(time_t time);
+struct tm* timeToStruct(time_t time);
+
 void noHandle(InterruptType type,int p,int q);
 void errorHandle(InterruptType type,int p,int q);
+void TimerHandler(InterruptType type,int d,int time);
 
 void Interrupt_Init(); //中断初始化
