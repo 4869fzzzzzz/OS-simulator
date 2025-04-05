@@ -23,7 +23,7 @@ void Interrupt_Init(){ //中断初始化
     |1<<static_cast<int>(InterruptType::NON_MASKABLE)
     |1<<static_cast<int>(InterruptType::PAGEFAULT)
     |1<<static_cast<int>(InterruptType::TEST)
-    |1<<static_cast<int>(InterruptType::ERROR);
+    |1<<static_cast<int>(InterruptType::MERROR);
     /*std::cout<<std::bitset<16>(valid)<<"中文"<<std::endl;
     if (valid&1<<static_cast<int>(InterruptType::SOFTWARE))
     {
@@ -42,8 +42,8 @@ void Interrupt_Init(){ //中断初始化
     InterruptVectorTable[static_cast<int>(InterruptType::PAGEFAULT)]=Pagefault;
     InterruptVector Test(noHandle, static_cast<int>(InterruptType::TEST));
     InterruptVectorTable[static_cast<int>(InterruptType::TEST)]=Test;
-    InterruptVector Error(errorHandle, static_cast<int>(InterruptType::ERROR));
-    InterruptVectorTable[static_cast<int>(InterruptType::ERROR)]=Error;
+    InterruptVector Error(errorHandle, static_cast<int>(InterruptType::MERROR));
+    InterruptVectorTable[static_cast<int>(InterruptType::MERROR)]=Error;
     //清空中断处理队列
     while(!InterruptQueue.empty())
         InterruptQueue.pop();

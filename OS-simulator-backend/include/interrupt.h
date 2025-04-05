@@ -11,7 +11,7 @@ enum class InterruptType { //枚举中断类型-类型的数值用于标注在�
     NON_MASKABLE, //不可屏蔽中断界限
     PAGEFAULT,
     TEST,
-    ERROR
+    MERROR
 };
 
 struct Interrupt {
