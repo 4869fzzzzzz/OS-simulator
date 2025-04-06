@@ -8,6 +8,7 @@ enum class InterruptType { //枚举中断类型-类型的数值用于标注在�
     TIMER = 0,
     DEVICE = 1, //设备采用中断触发
     SOFTWARE,
+    SNAPSHOT,
     NON_MASKABLE, //不可屏蔽中断界限
     PAGEFAULT,
     TEST,
@@ -87,5 +88,6 @@ struct tm* timeToStruct(time_t time);
 void noHandle(InterruptType type,int p,int q);
 void errorHandle(InterruptType type,int p,int q);
 void TimerHandler(InterruptType type,int d,int time);
+void snapshotSend(InterruptType t,int p,int q);
 
 void Interrupt_Init(); //中断初始化

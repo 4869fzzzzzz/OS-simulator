@@ -3,6 +3,7 @@
 
 char recv_buf[1024] = { '0' };
 char send_buf[1024] = { '0' };
+SOCKET clientSocket;
 
 MySocket::MySocket()
 {
