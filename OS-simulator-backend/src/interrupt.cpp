@@ -69,7 +69,7 @@ void errorHandle(InterruptType type,int p,int q){
 void raiseInterrupt(InterruptType t, int device_id, int value){
     Interrupt itp(t,device_id,value);
     if(handleFlag.load()){
-
+        readyInterruptQueue.push(itp);
     }else{
         iq.lock();
         InterruptQueue.push(itp);
