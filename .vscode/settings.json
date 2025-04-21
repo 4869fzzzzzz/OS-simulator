@@ -49,5 +49,8 @@
         "streambuf": "cpp",
         "thread": "cpp",
         "typeinfo": "cpp"
-    }
+    },
+    "cSpell.words": [
+        "AIGC"
+    ]
 }

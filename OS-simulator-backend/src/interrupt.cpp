@@ -1,5 +1,6 @@
 #include "../include/interrupt.h"
 #include "../include/socket.h"
+#include "../include/client.h"
 
 
 InterruptVector InterruptVectorTable[InterruptVectorTableSize]; //中断向量表
@@ -166,15 +167,10 @@ struct tm* timeToStruct(time_t time){
     return localtime(&time);
 }
 
-void snapshotSend(InterruptType t,int p,int q){
-    std::string frame;
-    frame+=std::string(timeToChar(startSysTime));
-    frame+=',';
-    frame+=std::string(timeToChar(nowSysTime));
-    frame+=";";
-    std::cout<<frame<<std::endl;
+time_t get_startSysTime(){
+    return startSysTime;
+}
 
-    /*memset(send_buf, 0, sizeof(send_buf));
-    strcpy(send_buf,frame.c_str());
-    send(clientSocket, send_buf, sizeof(send_buf), 0);*/
+time_t get_nowSysTime(){
+    return nowSysTime;
 }

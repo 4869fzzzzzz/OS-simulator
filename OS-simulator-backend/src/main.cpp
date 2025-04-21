@@ -4,10 +4,6 @@
 
 int main(){
     SetConsoleOutputCP(CP_UTF8);
-    struct test t;
-    t.i=10086;
-    std::cout<<"hello,中文"<<t.i<<std::endl;
-    Interrupt_Init();
     /*MySocket serverSocket;
     clientSocket = serverSocket.Accept();
     SOCKADDR_IN client_addr = serverSocket.client_addr;*/
@@ -15,7 +11,7 @@ int main(){
     while(1){
         
         if(1){
-
+            
         }
         handleInterrupt();
     }
