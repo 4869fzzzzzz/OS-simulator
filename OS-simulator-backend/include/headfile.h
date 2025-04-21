@@ -17,6 +17,12 @@
 #include <chrono>
 #include <stdlib.h>
 #include <winsock2.h>
+#include "rapidjson/document.h"
+#include "rapidjson/writer.h"
+#include "rapidjson/stringbuffer.h"
+#include "AIGCJson.hpp"
+
+using namespace aigc;
 
 
 struct test{

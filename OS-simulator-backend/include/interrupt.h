@@ -77,6 +77,7 @@ class InterruptTool { //操作的中断的工具函数--注意仅可操作可屏
     bool stopTimer(); //停止时钟线程-仅程序结束时使用
 };
 
+//中断函数
 void raiseInterrupt(InterruptType t, int device_id, int value); //产生一个中断
 void handleInterrupt(); //处理队列中产生的中断
 
@@ -88,6 +89,18 @@ struct tm* timeToStruct(time_t time);
 void noHandle(InterruptType type,int p,int q);
 void errorHandle(InterruptType type,int p,int q);
 void TimerHandler(InterruptType type,int d,int time);
-void snapshotSend(InterruptType t,int p,int q);
+
+time_t get_startSysTime();
+time_t get_nowSysTime();
+
 
 void Interrupt_Init(); //中断初始化
+
+//UI数据交换
+class TimerData{
+public:
+    std::string startSysTime;
+    std::string nowSysTime;
+    long long time_cnt;
+    AIGC_JSON_HELPER(startSysTime,nowSysTime,time_cnt)
+};
