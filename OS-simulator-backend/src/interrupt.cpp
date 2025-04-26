@@ -1,5 +1,6 @@
 #include "../include/interrupt.h"
-
+#include "../include/socket.h"
+#include "../include/client.h"
 
 
 InterruptVector InterruptVectorTable[InterruptVectorTableSize]; //中断向量表
@@ -20,6 +21,7 @@ void Interrupt_Init(){ //中断初始化
     valid=0x0000|1<<static_cast<int>(InterruptType::TIMER)
     |1<<static_cast<int>(InterruptType::DEVICE)
     |1<<static_cast<int>(InterruptType::SOFTWARE)
+    |1<<static_cast<int>(InterruptType::SNAPSHOT)
     |1<<static_cast<int>(InterruptType::NON_MASKABLE)
     |1<<static_cast<int>(InterruptType::PAGEFAULT)
     |1<<static_cast<int>(InterruptType::TEST)
@@ -36,6 +38,8 @@ void Interrupt_Init(){ //中断初始化
     InterruptVectorTable[static_cast<int>(InterruptType::DEVICE)]=Device;
     InterruptVector Software(noHandle, static_cast<int>(InterruptType::SOFTWARE));
     InterruptVectorTable[static_cast<int>(InterruptType::SOFTWARE)]=Software;
+    InterruptVector Snapshot(snapshotSend, static_cast<int>(InterruptType::SNAPSHOT));
+    InterruptVectorTable[static_cast<int>(InterruptType::SNAPSHOT)]=Snapshot;
     InterruptVector Non_maskable(noHandle, static_cast<int>(InterruptType::NON_MASKABLE));
     InterruptVectorTable[static_cast<int>(InterruptType::NON_MASKABLE)]=Non_maskable;
     InterruptVector Pagefault(noHandle, static_cast<int>(InterruptType::PAGEFAULT));
@@ -55,7 +59,7 @@ void Interrupt_Init(){ //中断初始化
     timerInterruptValid.store(0);
     time_cnt.store(0);
     th[0]=std::thread(TimeThread,Normal_Timer_Interval);
-    th[0].join();
+    th[0].detach();
 }
 
 void noHandle(InterruptType type,int p,int q){};
@@ -66,7 +70,7 @@ void errorHandle(InterruptType type,int p,int q){
 void raiseInterrupt(InterruptType t, int device_id, int value){
     Interrupt itp(t,device_id,value);
     if(handleFlag.load()){
-
+        readyInterruptQueue.push(itp);
     }else{
         iq.lock();
         InterruptQueue.push(itp);
@@ -146,8 +150,10 @@ void TimeThread(int interval = Normal_Timer_Interval) {
             raiseInterrupt(InterruptType::TIMER, 0, 0);
         }
         time_cnt.fetch_add(1);
-
-        nowSysTime =startSysTime+(time_cnt*interval)/ 1000; // interval 是毫秒，转换为秒
+        if((valid.load()|1<<static_cast<int>(InterruptType::SNAPSHOT))&&time_cnt.load()%10==0){
+            raiseInterrupt(InterruptType::SNAPSHOT,0,0);
+        }
+        nowSysTime =startSysTime+(time_cnt.load()*interval)/ 1000; // interval 是毫秒，转换为秒
         //std::cout << timeToChar(nowSysTime) << std::endl;
         // 延迟 interval 毫秒
         delay(interval);
@@ -159,4 +165,12 @@ char* timeToChar(time_t time){
 }
 struct tm* timeToStruct(time_t time){
     return localtime(&time);
+}
+
+time_t get_startSysTime(){
+    return startSysTime;
+}
+
+time_t get_nowSysTime(){
+    return nowSysTime;
 }

@@ -8,6 +8,8 @@
 
 extern char recv_buf[1024];
 extern char send_buf[1024];
+extern SOCKET clientSocket;
+
 
 class MySocket 
 {

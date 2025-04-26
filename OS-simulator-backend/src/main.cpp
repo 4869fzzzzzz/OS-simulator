@@ -3,8 +3,16 @@
 #include "../include/socket.h"
 
 int main(){
-    struct test t;
-    t.i=10086;
-    std::cout<<"hello,OS"<<t.i<<std::endl;
-    Interrupt_Init();
+    SetConsoleOutputCP(CP_UTF8);
+    /*MySocket serverSocket;
+    clientSocket = serverSocket.Accept();
+    SOCKADDR_IN client_addr = serverSocket.client_addr;*/
+    std::cout<<"主循环开始"<<std::endl;
+    while(1){
+        
+        if(1){
+            
+        }
+        handleInterrupt();
+    }
 }

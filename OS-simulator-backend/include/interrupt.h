@@ -8,6 +8,7 @@ enum class InterruptType { //枚举中断类型-类型的数值用于标注在�
     TIMER = 0,
     DEVICE = 1, //设备采用中断触发
     SOFTWARE,
+    SNAPSHOT,
     NON_MASKABLE, //不可屏蔽中断界限
     PAGEFAULT,
     TEST,
@@ -76,6 +77,7 @@ class InterruptTool { //操作的中断的工具函数--注意仅可操作可屏
     bool stopTimer(); //停止时钟线程-仅程序结束时使用
 };
 
+//中断函数
 void raiseInterrupt(InterruptType t, int device_id, int value); //产生一个中断
 void handleInterrupt(); //处理队列中产生的中断
 
@@ -88,4 +90,17 @@ void noHandle(InterruptType type,int p,int q);
 void errorHandle(InterruptType type,int p,int q);
 void TimerHandler(InterruptType type,int d,int time);
 
+time_t get_startSysTime();
+time_t get_nowSysTime();
+
+
 void Interrupt_Init(); //中断初始化
+
+//UI数据交换
+class TimerData{
+public:
+    std::string startSysTime;
+    std::string nowSysTime;
+    long long time_cnt;
+    AIGC_JSON_HELPER(startSysTime,nowSysTime,time_cnt)
+};
