@@ -48,9 +48,17 @@
         "stdexcept": "cpp",
         "streambuf": "cpp",
         "thread": "cpp",
+<<<<<<< HEAD
+        "typeinfo": "cpp",
+        "filesystem": "cpp",
+        "xstring": "cpp",
+        "iomanip": "cpp"
+    }
+=======
         "typeinfo": "cpp"
     },
     "cSpell.words": [
         "AIGC"
     ]
+>>>>>>> 3a92093ec822c1ec65800400bd87a76f09e247ca
 }
