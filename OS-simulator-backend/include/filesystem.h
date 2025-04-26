@@ -7,78 +7,78 @@
 
 using namespace std;
 
-// ÎÄ¼şÈ¨ÏŞ¶¨Òå
-#define READ "r"      // Ö»¶ÁÈ¨ÏŞ
-#define WRITE "w"     // Ğ´È¨ÏŞ
-#define EXECUTE "x"   // Ö´ĞĞÈ¨ÏŞ
+// æ–‡ä»¶æƒé™å®šä¹‰
+#define READ "r"      // åªè¯»æƒé™
+#define WRITE "w"     // å†™æƒé™
+#define EXECUTE "x"   // æ‰§è¡Œæƒé™
 
-// ÎÄ¼şÀàĞÍ¶¨Òå
-#define FILE_TYPE 0      // ÆÕÍ¨ÎÄ¼ş
-#define DIRECTORY_TYPE 1 // Ä¿Â¼
+// æ–‡ä»¶ç±»å‹å®šä¹‰
+#define FILE_TYPE 0      // æ™®é€šæ–‡ä»¶
+#define DIRECTORY_TYPE 1 // ç›®å½•
 
 //FCB
 struct FCB {
-    string filename;        // ÎÄ¼şÃû
-    int fileType;           // ÎÄ¼şÀàĞÍ£¨ÆÕÍ¨ÎÄ¼ş/Ä¿Â¼£©
-    int size;               // ÎÄ¼ş´óĞ¡
-    p_address diskAddress;  // ´æ´¢¸ÃÎÄ¼şµÄ´ÅÅÌµØÖ·
-    time_t creationTime;    // ÎÄ¼ş´´½¨Ê±¼ä
-    time_t lastModifiedTime;// ÎÄ¼ş×îºóĞŞ¸ÄÊ±¼ä
-    string permissions;     // ÎÄ¼şÈ¨ÏŞ£¨rwx£©
+    string filename;        // æ–‡ä»¶å
+    int fileType;           // æ–‡ä»¶ç±»å‹ï¼ˆæ™®é€šæ–‡ä»¶/ç›®å½•ï¼‰
+    int size;               // æ–‡ä»¶å¤§å°
+    p_address diskAddress;  // å­˜å‚¨è¯¥æ–‡ä»¶çš„ç£ç›˜åœ°å€
+    time_t creationTime;    // æ–‡ä»¶åˆ›å»ºæ—¶é—´
+    time_t lastModifiedTime;// æ–‡ä»¶æœ€åä¿®æ”¹æ—¶é—´
+    string permissions;     // æ–‡ä»¶æƒé™ï¼ˆrwxï¼‰
 };
 
-// Ä¿Â¼Ïî  ´æ´¢Ä¿Â¼ÖĞµÄÎÄ¼şºÍ×ÓÄ¿Â¼
+// ç›®å½•é¡¹  å­˜å‚¨ç›®å½•ä¸­çš„æ–‡ä»¶å’Œå­ç›®å½•
 struct DirEntry {
-    string name; // ÎÄ¼ş»òÄ¿Â¼Ãû³Æ
-    FCB* fcb;   // Ö¸ÏòÎÄ¼ş¿ØÖÆ¿é
+    string name; // æ–‡ä»¶æˆ–ç›®å½•åç§°
+    FCB* fcb;   // æŒ‡å‘æ–‡ä»¶æ§åˆ¶å—
 };
 
-// Ä¿Â¼½á¹¹  ÓÃÓÚ×éÖ¯ÎÄ¼şºÍ×ÓÄ¿Â¼µÄ²ã´Î½á¹¹
+// ç›®å½•ç»“æ„  ç”¨äºç»„ç»‡æ–‡ä»¶å’Œå­ç›®å½•çš„å±‚æ¬¡ç»“æ„
 struct Directory {
-    string name;               // Ä¿Â¼Ãû³Æ
-    vector<DirEntry> entries;  // Ä¿Â¼ÏÂµÄËùÓĞÎÄ¼şºÍ×ÓÄ¿Â¼
-    Directory* parent;         // Ö¸Ïò¸¸Ä¿Â¼
+    string name;               // ç›®å½•åç§°
+    vector<DirEntry> entries;  // ç›®å½•ä¸‹çš„æ‰€æœ‰æ–‡ä»¶å’Œå­ç›®å½•
+    Directory* parent;         // æŒ‡å‘çˆ¶ç›®å½•
 };
 
-// ÎÄ¼şÏµÍ³Àà
+// æ–‡ä»¶ç³»ç»Ÿç±»
 class FileSystem {
 private:
-    Directory* rootDir;                     // ¸ùÄ¿Â¼
-    unordered_map<string, FCB*> fileTable;  // ÎÄ¼şÂ·¾¶µ½FCBµÄÓ³Éä£¨¼ÓËÙ²éÕÒ£©
-    int totalBlocks;                        // ÎÄ¼şÏµÍ³×Ü¿éÊı
-    int blockSize;                          // Ã¿¸ö¿éµÄ´óĞ¡
-    vector<bool> diskUsage;                 // ¼ÇÂ¼´ÅÅÌ¿éµÄÊ¹ÓÃÇé¿ö
+    Directory* rootDir;                     // æ ¹ç›®å½•
+    unordered_map<string, FCB*> fileTable;  // æ–‡ä»¶è·¯å¾„åˆ°FCBçš„æ˜ å°„ï¼ˆåŠ é€ŸæŸ¥æ‰¾ï¼‰
+    int totalBlocks;                        // æ–‡ä»¶ç³»ç»Ÿæ€»å—æ•°
+    int blockSize;                          // æ¯ä¸ªå—çš„å¤§å°
+    vector<bool> diskUsage;                 // è®°å½•ç£ç›˜å—çš„ä½¿ç”¨æƒ…å†µ
 
-    // ·ÖÅä´ÅÅÌ¿Õ¼ä
+    // åˆ†é…ç£ç›˜ç©ºé—´
     p_address allocateDiskSpace(int size);
-    // ÊÍ·Å´ÅÅÌ¿Õ¼ä
+    // é‡Šæ”¾ç£ç›˜ç©ºé—´
     void freeDiskSpace(p_address address, int size);
     Directory* findDirectory(const string& path);
     std::string format_time(time_t rawtime);
 public:
-    FileSystem(int totalBlocks, int blockSize); // ¹¹Ôìº¯Êı
+    FileSystem(int totalBlocks, int blockSize); // æ„é€ å‡½æ•°
     ~FileSystem();
 
-    // ÎÄ¼ş¹ÜÀí¹¦ÄÜ
-    int createFile(string path, string filename, int fileType, int size); // ´´½¨ÎÄ¼ş
-    int deleteFile(string path, string filename); // É¾³ıÎÄ¼ş
+    // æ–‡ä»¶ç®¡ç†åŠŸèƒ½
+    int createFile(string path, string filename, int fileType, int size); // åˆ›å»ºæ–‡ä»¶
+    int deleteFile(string path, string filename); // åˆ é™¤æ–‡ä»¶
 
-    // Ä¿Â¼¹ÜÀí¹¦ÄÜ
+    // ç›®å½•ç®¡ç†åŠŸèƒ½
     int createDirectory(const string& path, const string& dirname);
     int deleteDirectory(const string& path);
     vector<string> listDirectory(const string& path);
     int deleteDirectoryRecursive(const string& path);
 
-    // ÎÄ¼ş¶ÁĞ´²Ù×÷
-    string readFile(string path, string filename); // ¶ÁÈ¡ÎÄ¼şÄÚÈİ
-    int writeFile(string path, string filename, string data); // Ğ´ÈëÎÄ¼ş
+    // æ–‡ä»¶è¯»å†™æ“ä½œ
+    string readFile(string path, string filename); // è¯»å–æ–‡ä»¶å†…å®¹
+    int writeFile(string path, string filename, string data); // å†™å…¥æ–‡ä»¶
 
-    // ÎÄ¼şÈ¨ÏŞ¹ÜÀí
-    int setPermissions(string path, string filename, string permissions); // ÉèÖÃÎÄ¼şÈ¨ÏŞ
+    // æ–‡ä»¶æƒé™ç®¡ç†
+    int setPermissions(string path, string filename, string permissions); // è®¾ç½®æ–‡ä»¶æƒé™
 
-    // ÎÄ¼şÏµÍ³ĞÅÏ¢
-    void printFileSystemStructure(); // ´òÓ¡ÎÄ¼şÏµÍ³µÄ²ã´Î½á¹¹
+    // æ–‡ä»¶ç³»ç»Ÿä¿¡æ¯
+    void printFileSystemStructure(); // æ‰“å°æ–‡ä»¶ç³»ç»Ÿçš„å±‚æ¬¡ç»“æ„
     void printDirectory(const string& path);
-    void printFreeSpaceList(); // ´òÓ¡¿ÕÏĞ¿Õ¼äĞÅÏ¢
-    void printUtilizationRate(); // ´òÓ¡Íâ´æÊ¹ÓÃÂÊ
+    void printFreeSpaceList(); // æ‰“å°ç©ºé—²ç©ºé—´ä¿¡æ¯
+    void printUtilizationRate(); // æ‰“å°å¤–å­˜ä½¿ç”¨ç‡
 };

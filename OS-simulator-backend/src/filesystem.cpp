@@ -10,28 +10,28 @@ FileSystem::FileSystem(int totalBlocks, int blockSize)
     memset(disk, 0, DISK_SIZE);
 }
 
-// 2. Îö¹¹º¯ÊıÊµÏÖ
+// 2. ææ„å‡½æ•°å®ç°
 FileSystem::~FileSystem() {
-    // ¶¨Òåµİ¹éÉ¾³ıº¯Êı
+    // å®šä¹‰é€’å½’åˆ é™¤å‡½æ•°
     auto deleteDirectory = [](Directory* dir) -> void {
-        // ÏÈ±£´æ×ÓÄ¿Â¼ÁĞ±í£¬·ÀÖ¹µü´úÆ÷Ê§Ğ§
+        // å…ˆä¿å­˜å­ç›®å½•åˆ—è¡¨ï¼Œé˜²æ­¢è¿­ä»£å™¨å¤±æ•ˆ
         vector<Directory*> subdirs;
 
-        // µÚÒ»±é±éÀú£º´¦ÀíÎÄ¼şºÍ·Çµİ¹éÄ¿Â¼
+        // ç¬¬ä¸€ééå†ï¼šå¤„ç†æ–‡ä»¶å’Œéé€’å½’ç›®å½•
         for (auto& entry : dir->entries) {
             if (entry.fcb->fileType == FILE_TYPE) {
-                delete entry.fcb;  // Ö±½ÓÉ¾³ıÎÄ¼ş
+                delete entry.fcb;  // ç›´æ¥åˆ é™¤æ–‡ä»¶
             }
             else {
                 subdirs.push_back(reinterpret_cast<Directory*>(entry.fcb));
             }
         }
 
-        // µÚ¶ş±é±éÀú£ºµİ¹éÉ¾³ı×ÓÄ¿Â¼
+        // ç¬¬äºŒééå†ï¼šé€’å½’åˆ é™¤å­ç›®å½•
         for (auto subdir : subdirs) {
-            // ´´½¨ÁÙÊ±Lambda½øĞĞµİ¹éµ÷ÓÃ
+            // åˆ›å»ºä¸´æ—¶Lambdaè¿›è¡Œé€’å½’è°ƒç”¨
             auto recursiveDelete = [](Directory* d) {
-                // Ê¹ÓÃº¯ÊıÖ¸Õë½â¾öµİ¹éÀàĞÍÍÆµ¼ÎÊÌâ
+                // ä½¿ç”¨å‡½æ•°æŒ‡é’ˆè§£å†³é€’å½’ç±»å‹æ¨å¯¼é—®é¢˜
                 static void (*del)(Directory*) = [](Directory* dir) {
                     for (auto& entry : dir->entries) {
                         if (entry.fcb->fileType == DIRECTORY_TYPE) {
@@ -46,7 +46,7 @@ FileSystem::~FileSystem() {
             recursiveDelete(subdir);
         }
 
-        delete dir;  // É¾³ıµ±Ç°Ä¿Â¼
+        delete dir;  // åˆ é™¤å½“å‰ç›®å½•
     };
 
     deleteDirectory(rootDir);
@@ -59,7 +59,7 @@ Directory* FileSystem::findDirectory(const string& path) {
     stringstream ss(path);
     string item;
 
-    // ²ğ·ÖÂ·¾¶×é¼ş
+    // æ‹†åˆ†è·¯å¾„ç»„ä»¶
     while (getline(ss, item, '/')) {
         if (!item.empty()) components.push_back(item);
     }
@@ -68,14 +68,14 @@ Directory* FileSystem::findDirectory(const string& path) {
     for (const auto& comp : components) {
         bool found = false;
         for (auto& entry : current->entries) {
-            // Ôö¼ÓÀàĞÍ¼ì²é
+            // å¢åŠ ç±»å‹æ£€æŸ¥
             if (entry.name == comp &&
                 entry.fcb->fileType == DIRECTORY_TYPE &&
                 entry.fcb->diskAddress != FULL)
             {
                 Directory* dir = reinterpret_cast<Directory*>(entry.fcb->diskAddress);
-                // ÄÚ´æÓĞĞ§ĞÔÑéÖ¤
-                if (dir->parent == current) {  // ¼ì²é¸¸Ö¸ÕëÒ»ÖÂĞÔ
+                // å†…å­˜æœ‰æ•ˆæ€§éªŒè¯
+                if (dir->parent == current) {  // æ£€æŸ¥çˆ¶æŒ‡é’ˆä¸€è‡´æ€§
                     current = dir;
                     found = true;
                     break;
@@ -90,43 +90,43 @@ Directory* FileSystem::findDirectory(const string& path) {
 int FileSystem::createFile(string path, string filename, int fileType, int size) {
     Directory* dir = findDirectory(path);
     if (!dir) {
-        cerr << "´´½¨ÎÄ¼şÊ§°Ü: Ä¿Â¼ [" << path << "] ²»´æÔÚ\n";
+        cerr << "åˆ›å»ºæ–‡ä»¶å¤±è´¥: ç›®å½• [" << path << "] ä¸å­˜åœ¨\n";
         return -1;
     }
 
-    // ¼ì²éÎÄ¼şÃû³åÍ»
+    // æ£€æŸ¥æ–‡ä»¶åå†²çª
     for (const auto& entry : dir->entries) {
         if (entry.name == filename) {
-            cerr << "´´½¨ÎÄ¼şÊ§°Ü: [" << filename << "] ÒÑ´æÔÚÓÚÄ¿Â¼ [" << path << "]\n";
+            cerr << "åˆ›å»ºæ–‡ä»¶å¤±è´¥: [" << filename << "] å·²å­˜åœ¨äºç›®å½• [" << path << "]\n";
             return -1;
         }
     }
 
-    // Ê¹ÓÃÄÚ´æ¹ÜÀíÄ£¿é·ÖÅäĞéÄâÄÚ´æ
+    // ä½¿ç”¨å†…å­˜ç®¡ç†æ¨¡å—åˆ†é…è™šæ‹Ÿå†…å­˜
     v_address v_addr;
     if (alloc_for_file(size, &v_addr) != 0) {
-        cerr << "ĞéÄâÄÚ´æ·ÖÅäÊ§°Ü£¡\n";
+        cerr << "è™šæ‹Ÿå†…å­˜åˆ†é…å¤±è´¥ï¼\n";
         return -1;
     }
 
-    // ´´½¨FCB
+    // åˆ›å»ºFCB
     FCB* fcb = new FCB{
         filename,
         fileType,
         size,
-        v_addr,  // ´æ´¢ĞéÄâµØÖ·
+        v_addr,  // å­˜å‚¨è™šæ‹Ÿåœ°å€
         time(nullptr),
         time(nullptr),
-        "rw-"  // Ä¬ÈÏÎÄ¼şÈ¨ÏŞ
+        "rw-"  // é»˜è®¤æ–‡ä»¶æƒé™
     };
 
-    // ¸üĞÂÄ¿Â¼Ïî
+    // æ›´æ–°ç›®å½•é¡¹
     dir->entries.push_back({ filename, fcb });
     string fullpath = (path == "/") ? path + filename : path + "/" + filename;
     fileTable[fullpath] = fcb;
 
-    cout << "´´½¨ÎÄ¼ş³É¹¦ " << fullpath
-        << " (´óĞ¡: " << size << " bytes, ĞéÄâµØÖ·: "
+    cout << "åˆ›å»ºæ–‡ä»¶æˆåŠŸ " << fullpath
+        << " (å¤§å°: " << size << " bytes, è™šæ‹Ÿåœ°å€: "
         << v_addr << ")\n";
     return 0;
 }
@@ -170,10 +170,10 @@ string FileSystem::readFile(string path, string filename) {
     string content;
     content.resize(fcb->size);
     
-    // Ê¹ÓÃÄÚ´æ¹ÜÀíÄ£¿é¶ÁÈ¡Êı¾İ
+    // ä½¿ç”¨å†…å­˜ç®¡ç†æ¨¡å—è¯»å–æ•°æ®
     for (size_t i = 0; i < fcb->size; ++i) {
         atom_data data;
-        v_address addr = fcb->diskAddress + i;  // Ö±½ÓÊ¹ÓÃĞéÄâµØÖ·
+        v_address addr = fcb->diskAddress + i;  // ç›´æ¥ä½¿ç”¨è™šæ‹Ÿåœ°å€
         if (read_memory(&data, addr, FULL) != 0) {
             cerr << "Failed to read memory for file: " << fullpath << endl;
             return "";
@@ -199,9 +199,9 @@ int FileSystem::writeFile(string path, string filename, string data) {
         return -1;
     }
 
-    // Öğ×Ö½ÚĞ´ÈëÊı¾İ
+    // é€å­—èŠ‚å†™å…¥æ•°æ®
     for (size_t i = 0; i < data.size(); ++i) {
-        v_address addr = fcb->diskAddress + i;  // Ö±½ÓÊ¹ÓÃĞéÄâµØÖ·
+        v_address addr = fcb->diskAddress + i;  // ç›´æ¥ä½¿ç”¨è™šæ‹Ÿåœ°å€
         if (write_memory(static_cast<atom_data>(data[i]), addr, FULL) != 0) {
             cerr << "Failed to write memory for file: " << fullpath << endl;
             return -1;
@@ -221,9 +221,9 @@ void FileSystem::printFreeSpaceList() {
     cout << endl;
 }
 
-// ¶¨Òå allocateDiskSpace º¯Êı
+// å®šä¹‰ allocateDiskSpace å‡½æ•°
 p_address FileSystem::allocateDiskSpace(int size) {
-    int blocksNeeded = (size + blockSize - 1) / blockSize; // ÏòÉÏÈ¡Õû
+    int blocksNeeded = (size + blockSize - 1) / blockSize; // å‘ä¸Šå–æ•´
     int startBlock = -1;
     int freeBlocks = 0;
 
@@ -245,20 +245,20 @@ p_address FileSystem::allocateDiskSpace(int size) {
         }
     }
     cout << "No sufficient disk space found\n";
-    return FULL; // Ã»ÓĞ×ã¹»µÄÁ¬Ğø¿ÕÏĞ¿é
+    return FULL; // æ²¡æœ‰è¶³å¤Ÿçš„è¿ç»­ç©ºé—²å—
 }
 
 
 
-// ¶¨Òå freeDiskSpace º¯Êı
+// å®šä¹‰ freeDiskSpace å‡½æ•°
 void FileSystem::freeDiskSpace(p_address addr, int size) {
-    int blocksToFree = (size + blockSize - 1) / blockSize; // ÏòÉÏÈ¡Õû
+    int blocksToFree = (size + blockSize - 1) / blockSize; // å‘ä¸Šå–æ•´
     for (int i = addr; i < addr + blocksToFree; ++i) {
         diskUsage[i] = false;
     }
 }
 
-// ´´½¨Ä¿Â¼
+// åˆ›å»ºç›®å½•
 int FileSystem::createDirectory(const string& path, const string& dirname) {
     Directory* parent = findDirectory(path);
     if (!parent) {
@@ -266,7 +266,7 @@ int FileSystem::createDirectory(const string& path, const string& dirname) {
         return -1;
     }
 
-    // ¼ì²éÍ¬ÃûÄ¿Â¼ÊÇ·ñ´æÔÚ
+    // æ£€æŸ¥åŒåç›®å½•æ˜¯å¦å­˜åœ¨
     for (const auto& entry : parent->entries) {
         if (entry.name == dirname) {
             cerr << "Create directory failed: [" << dirname << "] already exists in ["
@@ -275,47 +275,47 @@ int FileSystem::createDirectory(const string& path, const string& dirname) {
         }
     }
 
-    // ¹¹½¨ÍêÕûÂ·¾¶
+    // æ„å»ºå®Œæ•´è·¯å¾„
     string fullpath = (path == "/") ? path + dirname : path + "/" + dirname;
 
-    // ´´½¨Ä¿Â¼FCB
+    // åˆ›å»ºç›®å½•FCB
     FCB* dir_fcb = new FCB{
         dirname,
         DIRECTORY_TYPE,
-        0,                   // Ä¿Â¼´óĞ¡Îª0
-        FULL,                // ²»Õ¼ÓÃ´ÅÅÌ¿é
+        0,                   // ç›®å½•å¤§å°ä¸º0
+        FULL,                // ä¸å ç”¨ç£ç›˜å—
         time(nullptr),
         time(nullptr),
-        "rwx"                // Ä¬ÈÏÈ¨ÏŞ
+        "rwx"                // é»˜è®¤æƒé™
     };
 
-    // ´´½¨Ä¿Â¼¶ÔÏó²¢¹ØÁª
+    // åˆ›å»ºç›®å½•å¯¹è±¡å¹¶å…³è”
     Directory* new_dir = new Directory{
         dirname,
-        vector<DirEntry>(),  // Ã÷È·³õÊ¼»¯¿Õvector
+        vector<DirEntry>(),  // æ˜ç¡®åˆå§‹åŒ–ç©ºvector
         parent
     };
-    // ÑéÖ¤Ö¸Õë×ª»»
-    static_assert(sizeof(p_address) >= sizeof(Directory*), "p_addressÀàĞÍ´óĞ¡²»×ãÒÔ´æ´¢Ö¸Õë");
+    // éªŒè¯æŒ‡é’ˆè½¬æ¢
+    static_assert(sizeof(p_address) >= sizeof(Directory*), "p_addressç±»å‹å¤§å°ä¸è¶³ä»¥å­˜å‚¨æŒ‡é’ˆ");
     dir_fcb->diskAddress = reinterpret_cast<p_address>(new_dir);
 
-    // µ÷ÊÔÊä³ö
-    cout << "[DEBUG] ĞÂ½¨Ä¿Â¼µØÖ·: " << new_dir
-        << " ×ª»»ºó: " << dir_fcb->diskAddress << endl;
+    // è°ƒè¯•è¾“å‡º
+    cout << "[DEBUG] æ–°å»ºç›®å½•åœ°å€: " << new_dir
+        << " è½¬æ¢å: " << dir_fcb->diskAddress << endl;
 
-    // ¸üĞÂÄ¿Â¼½á¹¹
+    // æ›´æ–°ç›®å½•ç»“æ„
     parent->entries.push_back({ dirname, dir_fcb });
     fileTable[fullpath] = dir_fcb;
 
-    cout << "[DEBUG] ×¢²áÄ¿Â¼Â·¾¶: " << fullpath
-        << ", FCBµØÖ·: " << dir_fcb << endl;
+    cout << "[DEBUG] æ³¨å†Œç›®å½•è·¯å¾„: " << fullpath
+        << ", FCBåœ°å€: " << dir_fcb << endl;
 
-    cout << "´´½¨Ä¿Â¼³É¹¦: " << fullpath
-        << " (Ê±¼ä: " << format_time(dir_fcb->creationTime) << ")\n";
+    cout << "åˆ›å»ºç›®å½•æˆåŠŸ: " << fullpath
+        << " (æ—¶é—´: " << format_time(dir_fcb->creationTime) << ")\n";
     return 0;
 }
 
-// É¾³ıÄ¿Â¼
+// åˆ é™¤ç›®å½•
 int FileSystem::deleteDirectory(const string& path) {
     Directory* dir = findDirectory(path);
     if (!dir) {
@@ -323,13 +323,13 @@ int FileSystem::deleteDirectory(const string& path) {
         return -1;
     }
 
-    // ¼ì²éÊÇ·ñÎª¿ÕÄ¿Â¼
+    // æ£€æŸ¥æ˜¯å¦ä¸ºç©ºç›®å½•
     if (!dir->entries.empty()) {
         cerr << "Cannot delete non-empty directory: " << path << endl;
         return -1;
     }
 
-    // ´Ó¸¸Ä¿Â¼É¾³ıÌõÄ¿
+    // ä»çˆ¶ç›®å½•åˆ é™¤æ¡ç›®
     Directory* parent = dir->parent;
     if (parent) {
         auto& entries = parent->entries;
@@ -342,7 +342,7 @@ int FileSystem::deleteDirectory(const string& path) {
                     );
     }
 
-    // ÇåÀí×ÊÔ´
+    // æ¸…ç†èµ„æº
     FCB* fcb = fileTable[path];
     delete dir;
     delete fcb;
@@ -352,49 +352,49 @@ int FileSystem::deleteDirectory(const string& path) {
     return 0;
 }
 
-// µİ¹éÉ¾³ıÄ¿Â¼
+// é€’å½’åˆ é™¤ç›®å½•
 int FileSystem::deleteDirectoryRecursive(const string& path) {
-    cout << "\n¿ªÊ¼µİ¹éÉ¾³ı: " << path << endl;
+    cout << "\nå¼€å§‹é€’å½’åˆ é™¤: " << path << endl;
 
     Directory* dir = findDirectory(path);
     if (!dir) {
-        cerr << "É¾³ıÊ§°Ü: Ä¿Â¼ [" << path << "] ²»´æÔÚ\n";
+        cerr << "åˆ é™¤å¤±è´¥: ç›®å½• [" << path << "] ä¸å­˜åœ¨\n";
         return -1;
     }
 
-    // É¾³ıËùÓĞ×ÓÏî
-    vector<DirEntry> entries_copy = dir->entries;  // ·ÀÖ¹µü´úÆ÷Ê§Ğ§
+    // åˆ é™¤æ‰€æœ‰å­é¡¹
+    vector<DirEntry> entries_copy = dir->entries;  // é˜²æ­¢è¿­ä»£å™¨å¤±æ•ˆ
     for (const auto& entry : entries_copy) {
         string subpath = path + (path == "/" ? "" : "/") + entry.name;
 
         if (entry.fcb->fileType == DIRECTORY_TYPE) {
-            cout << "©¦  ©À©¤ ½øÈë×ÓÄ¿Â¼: " << subpath << endl;
+            cout << "â”‚  â”œâ”€ è¿›å…¥å­ç›®å½•: " << subpath << endl;
             if (deleteDirectoryRecursive(subpath) != 0) {
-                cerr << "©¦  ©¸©¤ É¾³ı×ÓÄ¿Â¼Ê§°Ü: " << subpath << endl;
+                cerr << "â”‚  â””â”€ åˆ é™¤å­ç›®å½•å¤±è´¥: " << subpath << endl;
                 return -1;
             }
         }
         else {
-            cout << "©¦  ©À©¤ É¾³ıÎÄ¼ş: " << entry.name
-                << " (´óĞ¡: " << entry.fcb->size << " bytes)" << endl;
+            cout << "â”‚  â”œâ”€ åˆ é™¤æ–‡ä»¶: " << entry.name
+                << " (å¤§å°: " << entry.fcb->size << " bytes)" << endl;
             if (deleteFile(path, entry.name) != 0) {
-                cerr << "©¦  ©¸©¤ ÎÄ¼şÉ¾³ıÊ§°Ü: " << entry.name << endl;
+                cerr << "â”‚  â””â”€ æ–‡ä»¶åˆ é™¤å¤±è´¥: " << entry.name << endl;
                 return -1;
             }
         }
     }
 
-    // É¾³ıµ±Ç°Ä¿Â¼
-    cout << "©¸©¤ É¾³ıÄ¿Â¼: " << path << endl;
+    // åˆ é™¤å½“å‰ç›®å½•
+    cout << "â””â”€ åˆ é™¤ç›®å½•: " << path << endl;
     if (deleteDirectory(path) != 0) {
-        cerr << "   Ä¿Â¼É¾³ıÊ§°Ü: " << path << endl;
+        cerr << "   ç›®å½•åˆ é™¤å¤±è´¥: " << path << endl;
         return -1;
     }
 
     return 0;
 }
 
-// ÁĞ³öÄ¿Â¼ÄÚÈİ
+// åˆ—å‡ºç›®å½•å†…å®¹
 vector<string> FileSystem::listDirectory(const string& path) {
     Directory* dir = findDirectory(path);
     vector<string> result;
@@ -408,54 +408,54 @@ vector<string> FileSystem::listDirectory(const string& path) {
     return result;
 }
 
-// ´òÓ¡Ä¿Â¼½á¹¹
+// æ‰“å°ç›®å½•ç»“æ„
 void FileSystem::printDirectory(const string& path) {
     Directory* dir = findDirectory(path);
     if (!dir) {
-        cerr << "Ä¿Â¼²»´æÔÚ: " << path << endl;
+        cerr << "ç›®å½•ä¸å­˜åœ¨: " << path << endl;
         return;
     }
 
-    // ¼ì²éÄ¿Â¼FCBÓĞĞ§ĞÔ
+    // æ£€æŸ¥ç›®å½•FCBæœ‰æ•ˆæ€§
     FCB* dir_fcb = fileTable[path];
     if (!dir_fcb || dir_fcb->fileType != DIRECTORY_TYPE) {
-        cerr << "·Ç·¨Ä¿Â¼ÔªÊı¾İ: " << path << endl;
+        cerr << "éæ³•ç›®å½•å…ƒæ•°æ®: " << path << endl;
         return;
     }
 
-    // ´òÓ¡ÓĞĞ§ĞÅÏ¢
-    cout << "\nÄ¿Â¼ÄÚÈİ: " << path;
-    cout << "\n©°©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©´";
-    cout << "\n©¦ ×îºóĞŞ¸ÄÊ±¼ä: " << format_time(dir_fcb->lastModifiedTime);
-    cout << "\n©À©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©Ğ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©Ğ©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©È";
-    cout << "\n©¦     ÀàĞÍ      ©¦    Ãû³Æ     ©¦      ´óĞ¡        ©¦";
-    cout << "\n©À©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©à©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©à©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©È";
+    // æ‰“å°æœ‰æ•ˆä¿¡æ¯
+    cout << "\nç›®å½•å†…å®¹: " << path;
+    cout << "\nâ”Œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”";
+    cout << "\nâ”‚ æœ€åä¿®æ”¹æ—¶é—´: " << format_time(dir_fcb->lastModifiedTime);
+    cout << "\nâ”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¬â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤";
+    cout << "\nâ”‚     ç±»å‹      â”‚    åç§°     â”‚      å¤§å°        â”‚";
+    cout << "\nâ”œâ”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¼â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”¤";
 
     if (dir->entries.empty()) {
-        cout << "\n©¦              ¿ÕÄ¿Â¼                          ©¦";
+        cout << "\nâ”‚              ç©ºç›®å½•                          â”‚";
     }
     else {
         for (const auto& entry : dir->entries) {
-            // Ôö¼ÓÌõÄ¿ÓĞĞ§ĞÔ¼ì²é
+            // å¢åŠ æ¡ç›®æœ‰æ•ˆæ€§æ£€æŸ¥
             if (!entry.fcb) {
-                cerr << "\n!! ·¢ÏÖÎŞĞ§Ä¿Â¼ÌõÄ¿ !!\n";
+                cerr << "\n!! å‘ç°æ— æ•ˆç›®å½•æ¡ç›® !!\n";
                 continue;
             }
 
-            string type = (entry.fcb->fileType == DIRECTORY_TYPE) ? "Ä¿Â¼" : "ÎÄ¼ş";
+            string type = (entry.fcb->fileType == DIRECTORY_TYPE) ? "ç›®å½•" : "æ–‡ä»¶";
             string size_str = (entry.fcb->fileType == DIRECTORY_TYPE) ?
                 "-" :
                 to_string(entry.fcb->size) + " bytes";
 
-            cout << "\n©¦ " << left << setw(13) << type
-                << "©¦ " << setw(11) << entry.name
-                << "©¦ " << setw(16) << size_str << "©¦";
+            cout << "\nâ”‚ " << left << setw(13) << type
+                << "â”‚ " << setw(11) << entry.name
+                << "â”‚ " << setw(16) << size_str << "â”‚";
         }
     }
-    cout << "\n©¸©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©Ø©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©Ø©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¤©¼\n";
+    cout << "\nâ””â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”´â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”˜\n";
 }
 
-//¸¨Öúº¯Êı
+//è¾…åŠ©å‡½æ•°
 string FileSystem::format_time(time_t rawtime) {
     struct tm* timeinfo = localtime(&rawtime);
     char buffer[80];

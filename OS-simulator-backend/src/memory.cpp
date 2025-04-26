@@ -9,35 +9,35 @@
 
 using namespace std;
 
-// ---------------- È«¾Ö±äÁ¿¶¨Òå ----------------
+// ---------------- å…¨å±€å˜é‡å®šä¹‰ ----------------
 
-// Ò³±íÊı×é
+// é¡µè¡¨æ•°ç»„
 PageTableItem page_table[PAGE_TABLE_SIZE];
-// ĞéÄâÒ³Ê¹ÓÃÇé¿öÎ»Í¼
+// è™šæ‹Ÿé¡µä½¿ç”¨æƒ…å†µä½å›¾
 page_bit v_page[V_PAGE_USE_SIZE] = { 0 };
-// ÎïÀíÒ³Ê¹ÓÃÇé¿öÎ»Í¼
+// ç‰©ç†é¡µä½¿ç”¨æƒ…å†µä½å›¾
 page_bit p_page[P_PAGE_USE_SIZE] = { 0 };
-// ClockÒ³ÃæÖÃ»»Ëã·¨µÄÖ¸Õë£¨Ê±ÖÓÖ¸Õë£©
+// Clocké¡µé¢ç½®æ¢ç®—æ³•çš„æŒ‡é’ˆï¼ˆæ—¶é’ŸæŒ‡é’ˆï¼‰
 Frame* clock_hand = nullptr;
-// Ö÷´æ£¨°üÀ¨ÄÚ´æºÍ½»»»Çø£©
+// ä¸»å­˜ï¼ˆåŒ…æ‹¬å†…å­˜å’Œäº¤æ¢åŒºï¼‰
 atom_data memory[MEMORY_SIZE + SWAP_SIZE] = { 0 };
-// ´ÅÅÌ¿Õ¼ä£¨´æ·Å±»»»³öµÄÒ³Ãæ£©
+// ç£ç›˜ç©ºé—´ï¼ˆå­˜æ”¾è¢«æ¢å‡ºçš„é¡µé¢ï¼‰
 atom_data disk[DISK_SIZE] = { 0 };
 
-// ---------------- ¸¨Öúº¯ÊıÉùÃ÷ ----------------
+// ---------------- è¾…åŠ©å‡½æ•°å£°æ˜ ----------------
 
-// ²éÕÒÒ»¸ö¿ÕÏĞµÄÎïÀíÒ³
+// æŸ¥æ‰¾ä¸€ä¸ªç©ºé—²çš„ç‰©ç†é¡µ
 static p_address find_free_ppage();
-// ³õÊ¼»¯ÎïÀíÄÚ´æÖ¡Á´±í
+// åˆå§‹åŒ–ç‰©ç†å†…å­˜å¸§é“¾è¡¨
 static void setup_frame_list();
-// ¸üĞÂÊ±ÖÓÖ¸Õë
+// æ›´æ–°æ—¶é’ŸæŒ‡é’ˆ
 static void update_clock_hand();
-// ÊÍ·ÅÄ³½ø³ÌËùÓĞÕ¼ÓÃµÄÒ³Ãæ
+// é‡Šæ”¾æŸè¿›ç¨‹æ‰€æœ‰å ç”¨çš„é¡µé¢
 static void free_pt_by_pid(m_pid pid);
 
-// ---------------- Ö÷¹¦ÄÜº¯ÊıÊµÏÖ ----------------
+// ---------------- ä¸»åŠŸèƒ½å‡½æ•°å®ç° ----------------
 
-// ³õÊ¼»¯ÄÚ´æÏµÍ³
+// åˆå§‹åŒ–å†…å­˜ç³»ç»Ÿ
 void init_memory() {
     memset(page_table, 0, sizeof(page_table));
     memset(v_page, 0, sizeof(v_page));
@@ -45,15 +45,15 @@ void init_memory() {
     setup_frame_list();
 }
 
-// ÎªÖ¸¶¨½ø³Ì·ÖÅäÒ»¶¨ÊıÁ¿µÄĞéÄâÄÚ´æ
+// ä¸ºæŒ‡å®šè¿›ç¨‹åˆ†é…ä¸€å®šæ•°é‡çš„è™šæ‹Ÿå†…å­˜
 v_address alloc_for_process(m_pid pid, m_size size) {
-    int pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE; // ĞèÒªµÄÒ³Êı
+    int pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE; // éœ€è¦çš„é¡µæ•°
     int start_page = -1;
     int consecutive = 0;
 
-    // ²éÕÒÁ¬ĞøµÄ¿ÕÏĞĞéÄâÒ³
+    // æŸ¥æ‰¾è¿ç»­çš„ç©ºé—²è™šæ‹Ÿé¡µ
     for (int i = 0; i < V_PAGE_USE_SIZE; ++i) {
-        if (!(v_page[i / 8] & (1 << (i % 8)))) { // ¿ÕÏĞÒ³
+        if (!(v_page[i / 8] & (1 << (i % 8)))) { // ç©ºé—²é¡µ
             if (++consecutive == pages_needed) {
                 start_page = i - pages_needed + 1;
                 break;
@@ -63,16 +63,16 @@ v_address alloc_for_process(m_pid pid, m_size size) {
         }
     }
 
-    if (start_page == -1) return FULL; // ÎŞ·¨·ÖÅä£¬·µ»ØFULL
+    if (start_page == -1) return FULL; // æ— æ³•åˆ†é…ï¼Œè¿”å›FULL
 
-    // ±ê¼ÇÒÑ·ÖÅäµÄĞéÄâÒ³£¬²¢ÉèÖÃÒ³±íÏî
+    // æ ‡è®°å·²åˆ†é…çš„è™šæ‹Ÿé¡µï¼Œå¹¶è®¾ç½®é¡µè¡¨é¡¹
     for (int i = 0; i < pages_needed; ++i) {
         int v_page_num = start_page + i;
         v_page[v_page_num / 8] |= 1 << (v_page_num % 8);
 
         PageTableItem& pt = page_table[v_page_num];
         pt.v_id = v_page_num;
-        pt.p_id = find_free_ppage(); // ²éÕÒ¿ÕÏĞÎïÀíÒ³
+        pt.p_id = find_free_ppage(); // æŸ¥æ‰¾ç©ºé—²ç‰©ç†é¡µ
         pt.owner = pid;
         pt.in_memory = (pt.p_id != FULL);
         pt.used = false;
@@ -81,27 +81,27 @@ v_address alloc_for_process(m_pid pid, m_size size) {
             p_page[pt.p_id / 8] |= 1 << (pt.p_id % 8);
             memset(&memory[pt.p_id * PAGE_SIZE], 0, PAGE_SIZE);
         } else {
-            // Ã»ÓĞÎïÀíÒ³¿ÉÓÃ£¬ĞèÒª»»ÈëÒ³Ãæ
+            // æ²¡æœ‰ç‰©ç†é¡µå¯ç”¨ï¼Œéœ€è¦æ¢å…¥é¡µé¢
             page_in(v_page_num * PAGE_SIZE, pid);
         }
     }
     return start_page * PAGE_SIZE;
 }
 
-// ÊÍ·ÅÖ¸¶¨½ø³ÌÕ¼ÓÃµÄËùÓĞĞéÄâÄÚ´æ
+// é‡Šæ”¾æŒ‡å®šè¿›ç¨‹å ç”¨çš„æ‰€æœ‰è™šæ‹Ÿå†…å­˜
 void free_process_memory(m_pid pid) {
     free_pt_by_pid(pid);
 }
 
-// ½«ĞéÄâÒ³µ÷ÈëÄÚ´æ
+// å°†è™šæ‹Ÿé¡µè°ƒå…¥å†…å­˜
 int page_in(v_address v_addr, m_pid pid) {
     page v_page_num = v_addr / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
 
-    // ²éÕÒ¿ÕÏĞÎïÀíÒ³
+    // æŸ¥æ‰¾ç©ºé—²ç‰©ç†é¡µ
     page p_page_num = find_free_ppage();
     if (p_page_num == FULL) {
-        // ÎŞ¿ÕÏĞÎïÀíÒ³Ê±Ê¹ÓÃclockÖÃ»»
+        // æ— ç©ºé—²ç‰©ç†é¡µæ—¶ä½¿ç”¨clockç½®æ¢
         p_page_num = clock_replace();
         if (p_page_num == FULL) {
             cerr << "[ERROR] No available physical page for page in" << endl;
@@ -110,12 +110,12 @@ int page_in(v_address v_addr, m_pid pid) {
         cout << "[DEBUG] Page replacement triggered: Victim page " << p_page_num << " (Virtual page " << v_page_num << ")" << endl;
     }
 
-    // ¸üĞÂÒ³±íÏî
+    // æ›´æ–°é¡µè¡¨é¡¹
     pt.p_id = p_page_num;
     pt.in_memory = true;
     p_page[p_page_num / 8] |= 1 << (p_page_num % 8);
 
-    // ´Ó´ÅÅÌÖĞ»Ö¸´Ò³ÃæÄÚÈİµ½ÄÚ´æ
+    // ä»ç£ç›˜ä¸­æ¢å¤é¡µé¢å†…å®¹åˆ°å†…å­˜
     memcpy(&memory[p_page_num * PAGE_SIZE],
            &disk[v_page_num * PAGE_SIZE],
            PAGE_SIZE);
@@ -127,23 +127,23 @@ page clock_replace() {
     Frame* current = clock_hand;
     while (true) {
         if (!current->used) {
-            // ÕÒµ½Ò»¸öÎ´±»Ê¹ÓÃµÄÖ¡£¬½øĞĞÖÃ»»
+            // æ‰¾åˆ°ä¸€ä¸ªæœªè¢«ä½¿ç”¨çš„å¸§ï¼Œè¿›è¡Œç½®æ¢
             page victim = current->p_id;
             
-            // ²éÕÒ¶ÔÓ¦µÄĞéÄâÒ³
+            // æŸ¥æ‰¾å¯¹åº”çš„è™šæ‹Ÿé¡µ
             for (int i = 0; i < PAGE_TABLE_SIZE; ++i) {
                 if (page_table[i].p_id == victim && page_table[i].owner == current->owner) {
-                    // ½«ÄÚ´æÊı¾İĞ´Èë´ÅÅÌ
+                    // å°†å†…å­˜æ•°æ®å†™å…¥ç£ç›˜
                     memcpy(&disk[page_table[i].v_id * PAGE_SIZE],
                            &memory[victim * PAGE_SIZE],
                            PAGE_SIZE);
                     
-                    // ¸üĞÂÒ³±íÏî
+                    // æ›´æ–°é¡µè¡¨é¡¹
                     page_table[i].in_memory = false;
                     page_table[i].p_id = FULL;
                     p_page[victim / 8] &= ~(1 << (victim % 8));
                     
-                    clock_hand = current->next; // ÒÆ¶¯Ê±ÖÓÖ¸Õë
+                    clock_hand = current->next; // ç§»åŠ¨æ—¶é’ŸæŒ‡é’ˆ
                     cout << "[DEBUG] Page out: Physical page " << victim << " -> Virtual page " << current->v_id << endl;
                     return victim;
                 }
@@ -156,9 +156,9 @@ page clock_replace() {
     }
 }
 
-// ---------------- ¸¨Öúº¯ÊıÊµÏÖ ----------------
+// ---------------- è¾…åŠ©å‡½æ•°å®ç° ----------------
 
-// ²éÕÒµÚÒ»¸ö¿ÕÏĞµÄÎïÀíÒ³
+// æŸ¥æ‰¾ç¬¬ä¸€ä¸ªç©ºé—²çš„ç‰©ç†é¡µ
 p_address find_free_ppage() {
     for (int i = 0; i < P_PAGE_USE_SIZE; ++i) {
         if (!(p_page[i / 8] & (1 << (i % 8)))) return i;
@@ -166,7 +166,7 @@ p_address find_free_ppage() {
     return FULL;
 }
 
-// ³õÊ¼»¯ÎïÀíÖ¡Á´±í£¬ÎªClockÖÃ»»Ëã·¨×ö×¼±¸
+// åˆå§‹åŒ–ç‰©ç†å¸§é“¾è¡¨ï¼Œä¸ºClockç½®æ¢ç®—æ³•åšå‡†å¤‡
 void setup_frame_list() {
     Frame* prev = nullptr;
     for (int i = 0; i < P_PAGE_USE_SIZE; ++i) {
@@ -180,10 +180,10 @@ void setup_frame_list() {
         else clock_hand = frame;
         prev = frame;
     }
-    prev->next = clock_hand; // Ñ­»·Á´±í
+    prev->next = clock_hand; // å¾ªç¯é“¾è¡¨
 }
 
-// ÊÍ·ÅÖ¸¶¨½ø³ÌµÄËùÓĞÒ³±íÏî¼°Õ¼ÓÃµÄÎïÀíÒ³
+// é‡Šæ”¾æŒ‡å®šè¿›ç¨‹çš„æ‰€æœ‰é¡µè¡¨é¡¹åŠå ç”¨çš„ç‰©ç†é¡µ
 void free_pt_by_pid(m_pid pid) {
     for (int i = 0; i < PAGE_TABLE_SIZE; ++i) {
         if (page_table[i].owner == pid) {
@@ -198,33 +198,33 @@ void free_pt_by_pid(m_pid pid) {
     }
 }
 
-//´ÓĞéÄâµØÖ·¶ÁÈ¡Ò»¸ö×Ö½ÚµÄÊı¾İ
+//ä»è™šæ‹Ÿåœ°å€è¯»å–ä¸€ä¸ªå­—èŠ‚çš„æ•°æ®
 int read_memory(atom_data* data, v_address address, m_pid pid) {
     page v_page_num = address / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
-    if (!pt.in_memory) return -1; // Ò³²»ÔÚÄÚ´æÖĞ
+    if (!pt.in_memory) return -1; // é¡µä¸åœ¨å†…å­˜ä¸­
     *data = memory[pt.p_id * PAGE_SIZE + (address % PAGE_SIZE)];
-    pt.used = true; // ±ê¼ÇÎª·ÃÎÊ¹ı
+    pt.used = true; // æ ‡è®°ä¸ºè®¿é—®è¿‡
     return 0;
 }
 
-// ½«Ò»¸ö×Ö½ÚĞ´Èëµ½Ö¸¶¨µÄĞéÄâµØÖ·
+// å°†ä¸€ä¸ªå­—èŠ‚å†™å…¥åˆ°æŒ‡å®šçš„è™šæ‹Ÿåœ°å€
 int write_memory(atom_data data, v_address address, m_pid pid) {
     page v_page_num = address / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
-    if (!pt.in_memory) return -1; // Ò³²»ÔÚÄÚ´æÖĞ
+    if (!pt.in_memory) return -1; // é¡µä¸åœ¨å†…å­˜ä¸­
     memory[pt.p_id * PAGE_SIZE + (address % PAGE_SIZE)] = data;
-    pt.used = true; // ±ê¼ÇÎª·ÃÎÊ¹ı
+    pt.used = true; // æ ‡è®°ä¸ºè®¿é—®è¿‡
     return 0;
 }
 
-// ÎªÉè±¸·ÖÅäÄÚ´æ»º³åÇø£¨´ı¶¨£©
+// ä¸ºè®¾å¤‡åˆ†é…å†…å­˜ç¼“å†²åŒºï¼ˆå¾…å®šï¼‰
 v_address alloc_for_device(int device_id, m_size size) {
     int pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE;
     int start_page = -1;
     int consecutive = 0;
 
-    // ÔÚÉè±¸»º³åÇø·¶Î§ÄÚ²éÕÒÁ¬Ğø¿ÕÏĞÒ³
+    // åœ¨è®¾å¤‡ç¼“å†²åŒºèŒƒå›´å†…æŸ¥æ‰¾è¿ç»­ç©ºé—²é¡µ
     int buffer_start = DEVICE_BUFFER_START / PAGE_SIZE;
     int buffer_end = buffer_start + DEVICE_BUFFER_SIZE / PAGE_SIZE;
 
@@ -241,7 +241,7 @@ v_address alloc_for_device(int device_id, m_size size) {
 
     if (start_page == -1) return FULL;
 
-    // ±ê¼ÇÒÑ·ÖÅäµÄĞéÄâÒ³
+    // æ ‡è®°å·²åˆ†é…çš„è™šæ‹Ÿé¡µ
     for (int i = 0; i < pages_needed; ++i) {
         int v_page_num = start_page + i;
         v_page[v_page_num / 8] |= 1 << (v_page_num % 8);
@@ -249,7 +249,7 @@ v_address alloc_for_device(int device_id, m_size size) {
         PageTableItem& pt = page_table[v_page_num];
         pt.v_id = v_page_num;
         pt.p_id = find_free_ppage();
-        pt.owner = FULL; // Éè±¸ÄÚ´æ²»ÊôÓÚÈÎºÎ½ø³Ì
+        pt.owner = FULL; // è®¾å¤‡å†…å­˜ä¸å±äºä»»ä½•è¿›ç¨‹
         pt.in_memory = (pt.p_id != FULL);
         pt.used = false;
 
@@ -261,7 +261,7 @@ v_address alloc_for_device(int device_id, m_size size) {
     return start_page * PAGE_SIZE;
 }
 
-//ÎªÎÄ¼ş·ÖÅäÄÚ´æ
+//ä¸ºæ–‡ä»¶åˆ†é…å†…å­˜
 int alloc_for_file(m_size size, v_address* addr) {
     v_address allocated = alloc_for_process(FULL, size);
     if (allocated == FULL) return -1;
@@ -269,12 +269,12 @@ int alloc_for_file(m_size size, v_address* addr) {
     return 0;
 }
 
-//ÊÍ·ÅÎÄ¼şÕ¼ÓÃµÄÄÚ´æ
+//é‡Šæ”¾æ–‡ä»¶å ç”¨çš„å†…å­˜
 void free_file_memory(v_address addr) {
     page v_page_num = addr / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
     
-    if (pt.owner == FULL) { // È·±£ÊÇÎÄ¼şÄÚ´æ
+    if (pt.owner == FULL) { // ç¡®ä¿æ˜¯æ–‡ä»¶å†…å­˜
         v_page[v_page_num / 8] &= ~(1 << (v_page_num % 8));
         if (pt.in_memory) {
             p_page[pt.p_id / 8] &= ~(1 << (pt.p_id % 8));
@@ -283,31 +283,31 @@ void free_file_memory(v_address addr) {
     }
 }
 
-// ½«ÎïÀíÄÚ´æÒ³Ãæ»»³öµ½´ÅÅÌ(ÎŞÓÃ´ıÉ¾)
+// å°†ç‰©ç†å†…å­˜é¡µé¢æ¢å‡ºåˆ°ç£ç›˜(æ— ç”¨å¾…åˆ )
 int page_out(p_address p_addr, m_pid pid) {
-    // ²éÕÒ¶ÔÓ¦µÄĞéÄâÒ³
+    // æŸ¥æ‰¾å¯¹åº”çš„è™šæ‹Ÿé¡µ
     for (int i = 0; i < PAGE_TABLE_SIZE; ++i) {
         if (page_table[i].p_id == p_addr && page_table[i].owner == pid) {
-            // ½«ÄÚ´æÊı¾İĞ´Èë´ÅÅÌ
+            // å°†å†…å­˜æ•°æ®å†™å…¥ç£ç›˜
             memcpy(&disk[page_table[i].v_id * PAGE_SIZE],
                    &memory[p_addr * PAGE_SIZE],
                    PAGE_SIZE);
             
-            // ¸üĞÂÒ³±íÏî
+            // æ›´æ–°é¡µè¡¨é¡¹
             page_table[i].in_memory = false;
             page_table[i].p_id = FULL;
             p_page[p_addr / 8] &= ~(1 << (p_addr % 8));
             return 0;
         }
     }
-    return -1; // Î´ÕÒµ½¶ÔÓ¦Ò³
+    return -1; // æœªæ‰¾åˆ°å¯¹åº”é¡µ
 }
 
 void test_memory() {
     cout << "=== Testing Memory Management ===" << endl;
     init_memory();
 
-    // ²âÊÔ1£º»ù±¾ÄÚ´æ·ÖÅäÓëÊÍ·Å
+    // æµ‹è¯•1ï¼šåŸºæœ¬å†…å­˜åˆ†é…ä¸é‡Šæ”¾
     cout << "\n[Test 1] Basic allocation and free:" << endl;
     m_pid pid1 = 1;
     v_address addr1 = alloc_for_process(pid1, 8192);
@@ -315,7 +315,7 @@ void test_memory() {
     free_process_memory(pid1);
     cout << "Freed process 1 memory" << endl;
 
-    // ²âÊÔ2£º¶à½ø³ÌÄÚ´æ·ÖÅä
+    // æµ‹è¯•2ï¼šå¤šè¿›ç¨‹å†…å­˜åˆ†é…
     cout << "\n[Test 2] Multi-process allocation:" << endl;
     m_pid pid2 = 2;
     v_address addr2 = alloc_for_process(pid2, 16384);
@@ -324,19 +324,19 @@ void test_memory() {
     v_address addr3 = alloc_for_process(pid3, 32768);
     cout << "Process 3 allocated at: " << addr3 << endl;
 
-    // ²âÊÔ3£ºÄÚ´æ¶ÁĞ´²Ù×÷
+    // æµ‹è¯•3ï¼šå†…å­˜è¯»å†™æ“ä½œ
     cout << "\n[Test 3] Memory read/write operations:" << endl;
     atom_data data;
     write_memory(0xAA, addr2, pid2);
     read_memory(&data, addr2, pid2);
     cout << "Read from process 2: " << (int)data << endl;
 
-    // ²âÊÔ4£ºÉè±¸ÄÚ´æ·ÖÅä
+    // æµ‹è¯•4ï¼šè®¾å¤‡å†…å­˜åˆ†é…
     cout << "\n[Test 4] Device memory allocation:" << endl;
     v_address dev_addr = alloc_for_device(1, 4096);
     cout << "Device buffer allocated at: " << dev_addr << endl;
 
-    // ²âÊÔ5£ºÎÄ¼şÄÚ´æ·ÖÅäÓëÊÍ·Å
+    // æµ‹è¯•5ï¼šæ–‡ä»¶å†…å­˜åˆ†é…ä¸é‡Šæ”¾
     cout << "\n[Test 5] File memory allocation:" << endl;
     v_address file_addr;
     if (alloc_for_file(8192, &file_addr) == 0) {
@@ -345,19 +345,19 @@ void test_memory() {
         cout << "Freed file memory" << endl;
     }
 
-    // ²âÊÔ6£ºÒ³ÃæÖÃ»»
+    // æµ‹è¯•6ï¼šé¡µé¢ç½®æ¢
     cout << "\n[Test 6] Page replacement:" << endl;
-    // ·ÖÅä´óÁ¿ÄÚ´æÒÔ´¥·¢Ò³ÃæÖÃ»»
+    // åˆ†é…å¤§é‡å†…å­˜ä»¥è§¦å‘é¡µé¢ç½®æ¢
     for (int i = 0; i < 100; i++) {
         alloc_for_process(4 + i, 65536);
     }
     cout << "Page replacement triggered" << endl;
 
-    // ²âÊÔ7£ºÄÚ´æ×´Ì¬±¨¸æ
+    // æµ‹è¯•7ï¼šå†…å­˜çŠ¶æ€æŠ¥å‘Š
     cout << "\n[Test 7] Memory status report:" << endl;
     sendMemoryStatusToUI();
 
-    // ÇåÀí
+    // æ¸…ç†
     free_process_memory(pid2);
     free_process_memory(pid3);
     for (int i = 0; i < 100; i++) {
@@ -369,21 +369,21 @@ void test_filesystem() {
     cout << "\n=== Testing File System ===" << endl;
     FileSystem fs(1024, 4096);
 
-    // ²âÊÔ1£º»ù´¡¶ÁĞ´²âÊÔ
+    // æµ‹è¯•1ï¼šåŸºç¡€è¯»å†™æµ‹è¯•
     cout << "\n[Test 1] Basic read/write:" << endl;
     fs.createFile("/", "data.bin", FILE_TYPE, 1024);
     
-    // Ğ´Èë¾«È·´óĞ¡µÄÊı¾İ
-    string testData(1024, 'A');  // 1024×Ö½ÚÈ«'A'
+    // å†™å…¥ç²¾ç¡®å¤§å°çš„æ•°æ®
+    string testData(1024, 'A');  // 1024å­—èŠ‚å…¨'A'
     fs.writeFile("/", "data.bin", testData);
-    // ¶ÁÈ¡ÑéÖ¤
+    // è¯»å–éªŒè¯
     string content = fs.readFile("/", "data.bin");
     cout << "File content: " << content << endl;
     cout << "Data verification: " 
          << (content == testData ? "Passed" : "Failed") 
          << endl;
 
-    // ²âÊÔ2£º¸²¸ÇĞ´Èë²âÊÔ
+    // æµ‹è¯•2ï¼šè¦†ç›–å†™å…¥æµ‹è¯•
     cout << "\n[Test 2] Overwrite test:" << endl;
     string newData(512, 'B');
     fs.writeFile("/", "data.bin", newData);
@@ -394,12 +394,12 @@ void test_filesystem() {
              content.substr(512) == string(512, 'A') ? "Passed" : "Failed")
          << endl;
     
-    // Êä³ödata.binÄÚÈİ
+    // è¾“å‡ºdata.binå†…å®¹
     cout << "File content: " << content << endl;
 
-    // ²âÊÔ3£º±ß½çÌõ¼ş²âÊÔ
+    // æµ‹è¯•3ï¼šè¾¹ç•Œæ¡ä»¶æµ‹è¯•
     cout << "\n[Test 3] Boundary condition test:" << endl;
-    // ´´½¨ÕıºÃÕ¼ÂúÒ»¸ö¿éµÄÎÄ¼ş£¨4096×Ö½Ú£©
+    // åˆ›å»ºæ­£å¥½å æ»¡ä¸€ä¸ªå—çš„æ–‡ä»¶ï¼ˆ4096å­—èŠ‚ï¼‰
     fs.createFile("/", "4kfile", FILE_TYPE, 4096);
     string fullBlock(4096, 'C');
     int writeResult = fs.writeFile("/", "4kfile", fullBlock);
@@ -407,9 +407,9 @@ void test_filesystem() {
          << (writeResult == 0 ? "Success" : "Failed") 
          << endl;
 
-    // ²âÊÔ4£º´óÎÄ¼ş²âÊÔ
+    // æµ‹è¯•4ï¼šå¤§æ–‡ä»¶æµ‹è¯•
     cout << "\n[Test 4] Large file test:" << endl;
-    const int LARGE_SIZE = 16 * 4096;  // 16¸ö¿é
+    const int LARGE_SIZE = 16 * 4096;  // 16ä¸ªå—
     fs.createFile("/", "large.bin", FILE_TYPE, LARGE_SIZE);
     
     string largeData(LARGE_SIZE, 'D');
@@ -419,13 +419,13 @@ void test_filesystem() {
          << " (" << LARGE_SIZE << " bytes)" 
          << endl;
 
-    // ²âÊÔ5£º¿Õ¼ä»ØÊÕÑéÖ¤
+    // æµ‹è¯•5ï¼šç©ºé—´å›æ”¶éªŒè¯
     cout << "\n[Test 5] Space reclamation:" << endl;
     fs.deleteFile("/", "data.bin");
     fs.deleteFile("/", "4kfile");
     cout << "Deleted two files" << endl;
     
-    // ÑéÖ¤¿Õ¼äÊÇ·ñ»ØÊÕ
+    // éªŒè¯ç©ºé—´æ˜¯å¦å›æ”¶
     cout << "Final free space list:" << endl;
     fs.printFreeSpaceList();
 }
@@ -433,60 +433,60 @@ void test_filesystem() {
 void test_directory_operations() {
     FileSystem fs(1024, 4096);
 
-    // ´´½¨Ä¿Â¼
+    // åˆ›å»ºç›®å½•
     fs.createDirectory("/", "documents");
-    fs.printDirectory("/documents"); // Ó¦ÏÔÊ¾¿ÕÄ¿Â¼
+    fs.printDirectory("/documents"); // åº”æ˜¾ç¤ºç©ºç›®å½•
 
-    // ´´½¨ÎÄ¼ş£¨½öÒ»´Î£©
+    // åˆ›å»ºæ–‡ä»¶ï¼ˆä»…ä¸€æ¬¡ï¼‰
     int createResult = fs.createFile("/documents", "notes.txt", FILE_TYPE, 1024);
     if (createResult == 0) {
         fs.printDirectory("/documents");
     } else {
-        cerr << "ÎÄ¼ş´´½¨Ê§°Ü£¬´íÎóÂë: " << createResult << endl;
-        return; // ÌáÇ°ÖÕÖ¹ÒÔÅÅ²éÎÊÌâ
+        cerr << "æ–‡ä»¶åˆ›å»ºå¤±è´¥ï¼Œé”™è¯¯ç : " << createResult << endl;
+        return; // æå‰ç»ˆæ­¢ä»¥æ’æŸ¥é—®é¢˜
     }
 
-    // ´´½¨×ÓÄ¿Â¼
+    // åˆ›å»ºå­ç›®å½•
     fs.createDirectory("/documents", "projects");
     fs.createDirectory("/documents", "1111");
-    fs.printDirectory("/documents"); // Ó¦ÏÔÊ¾ÎÄ¼şºÍÄ¿Â¼
+    fs.printDirectory("/documents"); // åº”æ˜¾ç¤ºæ–‡ä»¶å’Œç›®å½•
 
-    // Ğ´ÈëÎÄ¼şÄÚÈİ
+    // å†™å…¥æ–‡ä»¶å†…å®¹
     fs.writeFile("/documents", "notes.txt", "Project meeting notes...");
     int writeResult = fs.writeFile("/documents", "notes.txt", "Project meeting notes...");
     if (writeResult == 0) {
-        cout << "\nÎÄ¼şĞ´Èë³É¹¦";
+        cout << "\næ–‡ä»¶å†™å…¥æˆåŠŸ";
         
-        // ¶ÁÈ¡²¢Õ¹Ê¾ÄÚÈİ
-        cout << "\nÎÄ¼şÄÚÈİÔ¤ÀÀ£º";
+        // è¯»å–å¹¶å±•ç¤ºå†…å®¹
+        cout << "\næ–‡ä»¶å†…å®¹é¢„è§ˆï¼š";
         string content = fs.readFile("/documents", "notes.txt");
         cout << "\n--------------------------------------------------";
-        cout << "\n" << content.substr(0, 100) << "..." << endl; // ÏÔÊ¾Ç°100×Ö·û
+        cout << "\n" << content.substr(0, 100) << "..." << endl; // æ˜¾ç¤ºå‰100å­—ç¬¦
         cout << "--------------------------------------------------\n";
     } else {
-        cout << "\nÎÄ¼şĞ´ÈëÊ§°Ü";
+        cout << "\næ–‡ä»¶å†™å…¥å¤±è´¥";
     }
     
-    // µİ¹éÉ¾³ı
+    // é€’å½’åˆ é™¤
     cout << "\nDeleting /documents recursively..." << endl;
     
-    //É¾³ı×ÓÄ¿Â¼
+    //åˆ é™¤å­ç›®å½•
     fs.deleteDirectoryRecursive("/documents/projects");
     fs.printDirectory("/documents");
     
-    // ×îÖÕÑéÖ¤
+    // æœ€ç»ˆéªŒè¯
     fs.printDirectory("/");
 }
 
-//·¢ËÍÄÚ´æ×´Ì¬¸øUI
+//å‘é€å†…å­˜çŠ¶æ€ç»™UI
 int sendMemoryStatusToUI() {
-    //Ìí¼ÓÓëUIÍ¨ĞÅµÄ´úÂë
-    //ÀıÈç£ºÍ³¼Æ²¢·µ»ØÄÚ´æÊ¹ÓÃÇé¿ö¡¢Ò³ÃæÖÃ»»´ÎÊıµÈĞÅÏ¢
+    //æ·»åŠ ä¸UIé€šä¿¡çš„ä»£ç 
+    //ä¾‹å¦‚ï¼šç»Ÿè®¡å¹¶è¿”å›å†…å­˜ä½¿ç”¨æƒ…å†µã€é¡µé¢ç½®æ¢æ¬¡æ•°ç­‰ä¿¡æ¯
     return 0;
 }
 
 /*int main() {
-    SetConsoleOutputCP(CP_UTF8);  // ÉèÖÃ¿ØÖÆÌ¨Êä³öÎª UTF-8 ±àÂë
+    SetConsoleOutputCP(CP_UTF8);  // è®¾ç½®æ§åˆ¶å°è¾“å‡ºä¸º UTF-8 ç¼–ç 
     test_memory();
     //test_filesystem();
     //test_directory_operations();

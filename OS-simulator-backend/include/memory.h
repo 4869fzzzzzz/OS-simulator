@@ -5,134 +5,134 @@
 #include <cstring>
 #include <vector>
 
-typedef unsigned int m_pid;       // ½ø³Ì ID
-typedef unsigned int m_size;      // ÄÚ´æ´óĞ¡
-typedef unsigned char atom_data;  // µ¥×Ö½ÚÊı¾İÀàĞÍ
-typedef unsigned int v_address;   // ĞéÄâµØÖ·
-typedef uintptr_t p_address;   // ÎïÀíµØÖ·
-typedef unsigned int page;        // Ò³ÃæºÅ
+typedef unsigned int m_pid;       // è¿›ç¨‹ ID
+typedef unsigned int m_size;      // å†…å­˜å¤§å°
+typedef unsigned char atom_data;  // å•å­—èŠ‚æ•°æ®ç±»å‹
+typedef unsigned int v_address;   // è™šæ‹Ÿåœ°å€
+typedef uintptr_t p_address;   // ç‰©ç†åœ°å€
+typedef unsigned int page;        // é¡µé¢å·
 
-static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_t´óĞ¡ÓëÖ¸Õë²»Ò»ÖÂ");
+static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_tå¤§å°ä¸æŒ‡é’ˆä¸ä¸€è‡´");
 
-#define PAGE_TABLE_SIZE 1024 * 128  // Ò³±í×î´óÏîÊı
-#define V_PAGE_USE_SIZE 16 * 1024   // ĞéÄâÒ³ÊıÁ¿
-#define PAGE_SIZE 4096              // µ¥¸öÒ³Ãæ´óĞ¡£¨4KB£©
-#define P_PAGE_USE_SIZE 4 * 1024    // ÎïÀíÒ³ÊıÁ¿
-#define USE_RECORD_SIZE 1024 * 16   // ÄÚ´æÊ¹ÓÃ¼ÇÂ¼ÏîÊı
-#define FULL (1 << 24) - 1          // ±íÊ¾Î´·ÖÅä×´Ì¬µÄ±êÖ¾
-#define SWAP_SIZE 4 * 1024          // ½»»»¿Õ¼ä´óĞ¡
-#define SWAP_START 1024 * 1024 * 128 // ½»»»ÇøÆğÊ¼µØÖ·
-#define MEMORY_SIZE 1024 * 1024 * 132 // ÎïÀíÄÚ´æ´óĞ¡
-#define page_bit unsigned char      // Ò³±êÖ¾Î»
-#define DISK_SIZE 1024 * 1024 * 512 // Ä£Äâ´ÅÅÌ´óĞ¡
-#define DEVICE_BUFFER_START (MEMORY_SIZE - 1024 * 16) // Éè±¸»º³åÇøÆğÊ¼µØÖ· ´ı¶¨
-#define DEVICE_BUFFER_SIZE (1024 * 16) // Éè±¸»º³åÇø´óĞ¡ ´ı¶¨
+#define PAGE_TABLE_SIZE 1024 * 128  // é¡µè¡¨æœ€å¤§é¡¹æ•°
+#define V_PAGE_USE_SIZE 16 * 1024   // è™šæ‹Ÿé¡µæ•°é‡
+#define PAGE_SIZE 4096              // å•ä¸ªé¡µé¢å¤§å°ï¼ˆ4KBï¼‰
+#define P_PAGE_USE_SIZE 4 * 1024    // ç‰©ç†é¡µæ•°é‡
+#define USE_RECORD_SIZE 1024 * 16   // å†…å­˜ä½¿ç”¨è®°å½•é¡¹æ•°
+#define FULL (1 << 24) - 1          // è¡¨ç¤ºæœªåˆ†é…çŠ¶æ€çš„æ ‡å¿—
+#define SWAP_SIZE 4 * 1024          // äº¤æ¢ç©ºé—´å¤§å°
+#define SWAP_START 1024 * 1024 * 128 // äº¤æ¢åŒºèµ·å§‹åœ°å€
+#define MEMORY_SIZE 1024 * 1024 * 132 // ç‰©ç†å†…å­˜å¤§å°
+#define page_bit unsigned char      // é¡µæ ‡å¿—ä½
+#define DISK_SIZE 1024 * 1024 * 512 // æ¨¡æ‹Ÿç£ç›˜å¤§å°
+#define DEVICE_BUFFER_START (MEMORY_SIZE - 1024 * 16) // è®¾å¤‡ç¼“å†²åŒºèµ·å§‹åœ°å€ å¾…å®š
+#define DEVICE_BUFFER_SIZE (1024 * 16) // è®¾å¤‡ç¼“å†²åŒºå¤§å° å¾…å®š
 
-//Ò³±íÏî
+//é¡µè¡¨é¡¹
 struct PageTableItem {
-    v_address v_id;     // ĞéÄâÒ³ºÅ
-    p_address p_id;     // ÎïÀíÒ³ºÅ£¨FULL ´ú±íÎ´·ÖÅä£©
+    v_address v_id;     // è™šæ‹Ÿé¡µå·
+    p_address p_id;     // ç‰©ç†é¡µå·ï¼ˆFULL ä»£è¡¨æœªåˆ†é…ï¼‰
     m_pid owner;
-    bool in_memory;     // ÊÇ·ñÔÚÄÚ´æÖĞ
-    bool used;          // ·ÃÎÊÎ»£¨Clock ÖÃ»»Ëã·¨Ê¹ÓÃ£©
+    bool in_memory;     // æ˜¯å¦åœ¨å†…å­˜ä¸­
+    bool used;          // è®¿é—®ä½ï¼ˆClock ç½®æ¢ç®—æ³•ä½¿ç”¨ï¼‰
     PageTableItem() : v_id(0), p_id(FULL), in_memory(false), used(false) {}
 };
 
-//ÎïÀíÒ³Ö¡   Clock ÖÃ»»
+//ç‰©ç†é¡µå¸§   Clock ç½®æ¢
 struct Frame {
-    page p_id;       // ÎïÀíÒ³ºÅ
-    page v_id;       // ¹ØÁªµÄĞéÄâÒ³ºÅ
-    m_pid owner;     // ËùÊô½ø³Ì
-    bool used;       // ClockÖÃ»»
-    Frame* next;     // Ö¸ÏòÏÂÒ»¸öÒ³Ãæ£¬ĞÎ³É»·ĞÎÁ´±í
+    page p_id;       // ç‰©ç†é¡µå·
+    page v_id;       // å…³è”çš„è™šæ‹Ÿé¡µå·
+    m_pid owner;     // æ‰€å±è¿›ç¨‹
+    bool used;       // Clockç½®æ¢
+    Frame* next;     // æŒ‡å‘ä¸‹ä¸€ä¸ªé¡µé¢ï¼Œå½¢æˆç¯å½¢é“¾è¡¨
 };
 
-//Éè±¸¹ÜÀí Ôİ¶¨
+//è®¾å¤‡ç®¡ç† æš‚å®š
 struct Device {
-    int device_id;          // Éè±¸ ID
-    v_address buffer_address; // Éè±¸µÄ»º³åÇøµØÖ·
+    int device_id;          // è®¾å¤‡ ID
+    v_address buffer_address; // è®¾å¤‡çš„ç¼“å†²åŒºåœ°å€
 };
 
 
 
-//ÄÚ´æ¹ÜÀíÊı¾İ
-extern PageTableItem page_table[PAGE_TABLE_SIZE]; // Ò³±í
-extern page_bit v_page[V_PAGE_USE_SIZE];         // ĞéÄâÒ³ÃæÊ¹ÓÃÇé¿ö 1ÒÑ·ÖÅä 0Î´·ÖÅä
-extern page_bit p_page[P_PAGE_USE_SIZE];         // ÎïÀíÒ³ÃæÊ¹ÓÃÇé¿ö
-extern Frame* clock_hand;                        // Clock ÖÃ»»Ëã·¨µÄÖ¸Õë
-extern atom_data memory[MEMORY_SIZE + SWAP_SIZE];// ÎïÀíÄÚ´æ + ½»»»¿Õ¼ä
-extern atom_data disk[DISK_SIZE];                // Ä£Äâ´ÅÅÌ
+//å†…å­˜ç®¡ç†æ•°æ®
+extern PageTableItem page_table[PAGE_TABLE_SIZE]; // é¡µè¡¨
+extern page_bit v_page[V_PAGE_USE_SIZE];         // è™šæ‹Ÿé¡µé¢ä½¿ç”¨æƒ…å†µ 1å·²åˆ†é… 0æœªåˆ†é…
+extern page_bit p_page[P_PAGE_USE_SIZE];         // ç‰©ç†é¡µé¢ä½¿ç”¨æƒ…å†µ
+extern Frame* clock_hand;                        // Clock ç½®æ¢ç®—æ³•çš„æŒ‡é’ˆ
+extern atom_data memory[MEMORY_SIZE + SWAP_SIZE];// ç‰©ç†å†…å­˜ + äº¤æ¢ç©ºé—´
+extern atom_data disk[DISK_SIZE];                // æ¨¡æ‹Ÿç£ç›˜
 
-//³õÊ¼»¯ÄÚ´æ¹ÜÀíÄ£¿é
+//åˆå§‹åŒ–å†…å­˜ç®¡ç†æ¨¡å—
 void init_memory();
 
-//Îª½ø³Ì·ÖÅäĞéÄâµØÖ·¿Õ¼ä
+//ä¸ºè¿›ç¨‹åˆ†é…è™šæ‹Ÿåœ°å€ç©ºé—´
 v_address alloc_for_process(m_pid pid, m_size size);
 
-//ÊÍ·Å½ø³ÌµÄÈ«²¿ÄÚ´æ
+//é‡Šæ”¾è¿›ç¨‹çš„å…¨éƒ¨å†…å­˜
 void free_process_memory(m_pid pid);
 
-//ÎªÉè±¸·ÖÅäÄÚ´æ»º³åÇø
+//ä¸ºè®¾å¤‡åˆ†é…å†…å­˜ç¼“å†²åŒº
 v_address alloc_for_device(int device_id, m_size size);
 
 /**
- * @brief ÎªÎÄ¼ş·ÖÅäÄÚ´æ
- * @param size ·ÖÅä´óĞ¡
- * @param addr ·µ»Ø·ÖÅäµÄĞéÄâµØÖ·
- * @return ³É¹¦·µ»Ø 0£¬Ê§°Ü·µ»Ø -1
+ * @brief ä¸ºæ–‡ä»¶åˆ†é…å†…å­˜
+ * @param size åˆ†é…å¤§å°
+ * @param addr è¿”å›åˆ†é…çš„è™šæ‹Ÿåœ°å€
+ * @return æˆåŠŸè¿”å› 0ï¼Œå¤±è´¥è¿”å› -1
  */
 int alloc_for_file(m_size size, v_address* addr);
 
 /**
- * @brief ÊÍ·ÅÎÄ¼şÕ¼ÓÃµÄÄÚ´æ
- * @param addr ÊÍ·ÅµÄĞéÄâµØÖ·
+ * @brief é‡Šæ”¾æ–‡ä»¶å ç”¨çš„å†…å­˜
+ * @param addr é‡Šæ”¾çš„è™šæ‹Ÿåœ°å€
  */
 void free_file_memory(v_address addr);
 
 /**
- * @brief ´ÓÖ¸¶¨µØÖ·¶ÁÈ¡Êı¾İ
- * @param data ¶ÁÈ¡µÄÄ¿±ê»º³åÇø
- * @param address ¶ÁÈ¡µÄĞéÄâµØÖ·
- * @param pid ½ø³Ì ID
- * @return ³É¹¦·µ»Ø 0£¬Ê§°Ü·µ»Ø -1£¨È±Ò³£©
+ * @brief ä»æŒ‡å®šåœ°å€è¯»å–æ•°æ®
+ * @param data è¯»å–çš„ç›®æ ‡ç¼“å†²åŒº
+ * @param address è¯»å–çš„è™šæ‹Ÿåœ°å€
+ * @param pid è¿›ç¨‹ ID
+ * @return æˆåŠŸè¿”å› 0ï¼Œå¤±è´¥è¿”å› -1ï¼ˆç¼ºé¡µï¼‰
  */
 int read_memory(atom_data* data, v_address address, m_pid pid);
 
 /**
- * @brief ÏòÖ¸¶¨µØÖ·Ğ´ÈëÊı¾İ
- * @param data ÒªĞ´ÈëµÄÊı¾İ
- * @param address Ä¿±êĞéÄâµØÖ·
- * @param pid ½ø³Ì ID
- * @return ³É¹¦·µ»Ø 0£¬Ê§°Ü·µ»Ø -1£¨È±Ò³£©
+ * @brief å‘æŒ‡å®šåœ°å€å†™å…¥æ•°æ®
+ * @param data è¦å†™å…¥çš„æ•°æ®
+ * @param address ç›®æ ‡è™šæ‹Ÿåœ°å€
+ * @param pid è¿›ç¨‹ ID
+ * @return æˆåŠŸè¿”å› 0ï¼Œå¤±è´¥è¿”å› -1ï¼ˆç¼ºé¡µï¼‰
  */
 int write_memory(atom_data data, v_address address, m_pid pid);
 
 /**
- * @brief ²ÉÓÃ Clock ÖÃ»»Ëã·¨Ñ¡Ôñ±»ÌÔÌ­µÄÒ³Ãæ
- * @return ·µ»Ø±»ÌÔÌ­µÄÎïÀíÒ³ºÅ
+ * @brief é‡‡ç”¨ Clock ç½®æ¢ç®—æ³•é€‰æ‹©è¢«æ·˜æ±°çš„é¡µé¢
+ * @return è¿”å›è¢«æ·˜æ±°çš„ç‰©ç†é¡µå·
  */
 page clock_replace();
 
 /**
- * @brief ´¦ÀíÈ±Ò³ÖĞ¶Ï£¬½«´ÅÅÌÉÏµÄÒ³Ãæµ÷ÈëÄÚ´æ
- * @param v_addr ĞèÒªµ÷ÈëµÄĞéÄâµØÖ·
- * @param pid ½ø³Ì ID
- * @return ³É¹¦·µ»Ø 0£¬Ê§°Ü·µ»Ø -1
+ * @brief å¤„ç†ç¼ºé¡µä¸­æ–­ï¼Œå°†ç£ç›˜ä¸Šçš„é¡µé¢è°ƒå…¥å†…å­˜
+ * @param v_addr éœ€è¦è°ƒå…¥çš„è™šæ‹Ÿåœ°å€
+ * @param pid è¿›ç¨‹ ID
+ * @return æˆåŠŸè¿”å› 0ï¼Œå¤±è´¥è¿”å› -1
  */
 int page_in(v_address v_addr, m_pid pid);
 
 /**
- * @brief ½«ÎïÀíÄÚ´æÒ³Ãæ»»³öµ½´ÅÅÌ
- * @param p_addr ĞèÒª»»³öµÄÎïÀíµØÖ·
- * @param pid ½ø³Ì ID
- * @return ³É¹¦·µ»Ø 0£¬Ê§°Ü·µ»Ø -1
+ * @brief å°†ç‰©ç†å†…å­˜é¡µé¢æ¢å‡ºåˆ°ç£ç›˜
+ * @param p_addr éœ€è¦æ¢å‡ºçš„ç‰©ç†åœ°å€
+ * @param pid è¿›ç¨‹ ID
+ * @return æˆåŠŸè¿”å› 0ï¼Œå¤±è´¥è¿”å› -1
  */
 int page_out(p_address p_addr, m_pid pid);
 
-//½«ÄÚ´æ×´Ì¬·¢¸øui
+//å°†å†…å­˜çŠ¶æ€å‘ç»™ui
 int sendMemoryStatusToUI();
 
-//²âÊÔº¯Êı
+//æµ‹è¯•å‡½æ•°
 void test_memory();
 void test_filesystem();
 void test_directory_operations();
