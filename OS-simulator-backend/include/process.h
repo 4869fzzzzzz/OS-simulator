@@ -87,6 +87,15 @@ typedef struct CPU {
 	int pid;//占用CPU的PCB
 }CPU;
 
+extern list<PCB> PCBList;//总进程队列
+extern list<PCB> readyList;//就绪队列
+extern list<PCB> blockList;//阻塞队列
+extern list<PCB> suspendList;//挂起队列
+
+//阻塞状态队列
+extern list<PCB> waitForKeyBoardList;//等待键盘队列
+extern list<PCB> waitForPrintList;//等待打印机队列
+
 void applyForResource(PCB& p);//进程在创建态申请资源
 
 PCB create(string filepath, string filename);
@@ -102,4 +111,4 @@ void CPUScheduler(PCB& p);//短期调度程序
 void Execute();//进程执行函数
 void updateTaskState();//进程状态更新函数
 
-void Interrupt(PCB& p, int reason);//调用中断函数 I/O中断,进程调度,文件读写中断等
+void pInterrupt(PCB& p, int reason);//调用中断函数 I/O中断,进程调度,文件读写中断等

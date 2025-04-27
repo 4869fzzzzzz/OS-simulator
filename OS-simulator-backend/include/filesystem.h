@@ -1,9 +1,6 @@
 #pragma once
-#include <iostream>
-#include <vector>
-#include <unordered_map>
-#include <ctime>
-#include "memory.h"
+#include "./headfile.h"
+#include "./memory.h"
 
 using namespace std;
 

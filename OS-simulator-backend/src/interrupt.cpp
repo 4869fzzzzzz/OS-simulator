@@ -2,6 +2,7 @@
 #include "../include/socket.h"
 #include "../include/client.h"
 
+//新的中断处理函数参数 1.uint32 2.int32 3.string 4.int* 5.int32
 
 InterruptVector InterruptVectorTable[InterruptVectorTableSize]; //中断向量表
 std::mutex iq; //中断队列锁
@@ -173,4 +174,8 @@ time_t get_startSysTime(){
 
 time_t get_nowSysTime(){
     return nowSysTime;
+}
+
+void RUN(std::string cmd){
+    
 }
