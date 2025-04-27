@@ -551,7 +551,7 @@ void MidTermScheduler(int inOrOut) {
 						blocks += it->task_size;
 						it->is_apply = false;
 
-						Interrupt(*it, MIDTERM_SWITCH_OUT);
+						pInterrupt(*it, MIDTERM_SWITCH_OUT);
 
 						break;
 					}
@@ -573,7 +573,7 @@ void MidTermScheduler(int inOrOut) {
 		if (pcbPair.second != -1) {
 			for (list<PCB>::iterator it = suspendList.begin(); it != suspendList.end(); ++it) {
 				if (it->pid == pcbPair.second) {
-					Interrupt(*it, MIDTERM_SWITCH_IN);
+					pInterrupt(*it, MIDTERM_SWITCH_IN);
 					break;
 				}
 			}
@@ -593,7 +593,7 @@ void updateTaskState() {
 		//cout<<keyP.wtime.keyboardStartTime<<"  "<<keyTime<< endl;
 		cout << "pid=" << keyP.pid << " " << "time:" << Timer - keyP.keyboardStartTime << endl;
 		if ((Timer - keyP.keyboardStartTime) == keyTime) {
-			Interrupt(keyP, KEYBOARD_SWITCH_OVER);
+			pInterrupt(keyP, KEYBOARD_SWITCH_OVER);
 		}
 	}
 
@@ -605,7 +605,7 @@ void updateTaskState() {
 		//cout<<keyP.wtime.keyboardStartTime<<"  "<<keyTime<< endl;
 		cout << "pid=" << printP.pid << " " << "time:" << Timer - printP.printStartTime << endl;
 		if ((Timer - printP.printStartTime) == printTime) {
-			Interrupt(printP, PRINT_SWITCH_OVER);
+			pInterrupt(printP, PRINT_SWITCH_OVER);
 		}
 	}
 	/*遍历等待fileMutex的map*/
@@ -628,7 +628,7 @@ void updateTaskState() {
 			cout << wtime << endl;
 			cout << "pid=" << writeP.pid << " " << "wtime:" << Timer - writeP.filewriteStartTime << endl;
 			if ((Timer - writeP.filewriteStartTime) == atoi(wtime.c_str())) {
-				Interrupt(writeP, FILE_SWITCH_OVER);
+				pInterrupt(writeP, FILE_SWITCH_OVER);
 			}
 		}
 
@@ -646,7 +646,7 @@ void updateTaskState() {
 			cout << "alltime" << alltime << endl;
 			if (cputime == alltime) {
 				/*执行上下文切换 将被切换进程的状态保存在PCB中*/
-				Interrupt(*it, NORMAL_SWITCH);
+				pInterrupt(*it, NORMAL_SWITCH);
 
 			}
 		}
@@ -735,7 +735,7 @@ void Execute() {
 					for (list<PCB>::iterator it1 = PCBList.begin(); it1 != PCBList.end(); ++it1) {
 						if (it1->state == RUNNING) {
 							cout << "running" << endl;
-							Interrupt(*it1, PREEMPTION_SWITCH);
+							pInterrupt(*it1, PREEMPTION_SWITCH);
 							CPUScheduler(*it);
 							readyList.erase(it++);
 							break;
@@ -750,11 +750,11 @@ void Execute() {
 		}
 		/*除了C之外的所有命令都执行中断，进入阻塞队列，进行相应的操作*/
 		else if (s == "K") {  //执行键盘输入
-			Interrupt(*it, KEYBOARD_SWITCH);
+			pInterrupt(*it, KEYBOARD_SWITCH);
 			readyList.erase(it++);
 		}
 		else if (s == "P") {  //执行打印机输出
-			Interrupt(*it, PRINT_SWITCH);
+			pInterrupt(*it, PRINT_SWITCH);
 			readyList.erase(it++);
 		}
 		else if (s == "R") {  //执行文件读取
@@ -767,7 +767,7 @@ void Execute() {
 
 			it->fs = path;//此时进程访问文件的路径
 			it->fsState = "R";
-			Interrupt(*it, FILE_SWITCH_READ);
+			pInterrupt(*it, FILE_SWITCH_READ);
 			readyList.erase(it++);
 
 		}
@@ -781,7 +781,7 @@ void Execute() {
 			
 			it->fs = path;//此时进程访问文件的路径
 			it->fsState = "W";
-			Interrupt(*it, FILE_SWITCH_WRITE);
+			pInterrupt(*it, FILE_SWITCH_WRITE);
 			readyList.erase(it++);
 			
 		}
