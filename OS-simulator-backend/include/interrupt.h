@@ -96,6 +96,8 @@ time_t get_nowSysTime();
 
 void Interrupt_Init(); //中断初始化
 
+void RUN(std::string cmd);//运行一条指令
+
 //UI数据交换
 class TimerData{
 public:

@@ -1,9 +1,9 @@
 #include <windows.h>
 #include <iostream>
 #include <filesystem>
-#include "process.h"
-#include "file.h"
-#include "memory.h"
+#include "../include/process.h"
+#include "../include/filesystem.h"
+#include "../include/memory.h"
 
 #define USERMODE 0
 #define KERNELMODE 1
@@ -360,7 +360,7 @@ void applyForResource(PCB& p) {
 	}
 };
 
-void Interrupt(PCB& p, int reason) {
+void pInterrupt(PCB& p, int reason) {
 	p.cpuState = KERNELMODE;//中断状态下 进程处于内核模式
 	//进程正常结束或遇到I/O阻塞等等进程进行切换时 需要保存上下文环境 将旧进程的状态保存在PCB中 新进程调入CPU
 	//如果是正常的进程占用时间片结束

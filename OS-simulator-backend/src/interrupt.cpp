@@ -174,3 +174,7 @@ time_t get_startSysTime(){
 time_t get_nowSysTime(){
     return nowSysTime;
 }
+
+void RUN(std::string cmd){
+    
+}
