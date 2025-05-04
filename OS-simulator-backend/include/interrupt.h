@@ -14,21 +14,27 @@ enum class InterruptType { //枚举中断类型-类型的数值用于标注在�
     TEST,
     MERROR
 };
-
+//新的中断参数 
 struct Interrupt {
     InterruptType type;
-    int device_id;
-    int value;
-    int timecount;
-    Interrupt(InterruptType tp,int did,int vle){
+    int value1;
+    int value2;
+    std::string value3;
+    int* value4;
+    int value5;
+    long long timecount;//产生中断时间
+    Interrupt(InterruptType tp,int v1,int v2,std::string v3,int* v4,int v5){
         type=tp;
-        device_id=did;
-        value=vle;
-        timecount=0;
+        value1=v1;
+        value2=v2;
+        value3=v3;
+        value4=v4;
+        value5=v5;
+        timecount=time_cnt.load();
     }
 };
 
-typedef void (*InterruptFunc)(InterruptType, int, int); //中断处理函数指针，参数依次为中断类型，设备id，可选值
+typedef void (*InterruptFunc)(InterruptType, int, int, std::string, int*, int); //中断处理函数指针，参数依次为中断类型，设备id，可选值
 
 struct InterruptVector {
     InterruptFunc handler = nullptr; //中断处理函数指针
@@ -78,7 +84,7 @@ class InterruptTool { //操作的中断的工具函数--注意仅可操作可屏
 };
 
 //中断函数
-void raiseInterrupt(InterruptType t, int device_id, int value); //产生一个中断
+void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int v5); //产生一个中断
 void handleInterrupt(); //处理队列中产生的中断
 
 void delay(int timeout_ms);
@@ -86,9 +92,8 @@ void TimeThread(int interval);
 char* timeToChar(time_t time);
 struct tm* timeToStruct(time_t time);
 
-void noHandle(InterruptType type,int p,int q);
-void errorHandle(InterruptType type,int p,int q);
-void TimerHandler(InterruptType type,int d,int time);
+void noHandle(InterruptType type,int v1,int v2,std::string v3,int* v4, int v5);
+void errorHandle(InterruptType type,int v1,int v2,std::string v3,int* v4, int v5);
 
 time_t get_startSysTime();
 time_t get_nowSysTime();
@@ -97,6 +102,7 @@ time_t get_nowSysTime();
 void Interrupt_Init(); //中断初始化
 
 void RUN(std::string cmd);//运行一条指令
+void CmdSplit(std::string cmd,std::vector<std::string> scmd);//划分指令
 
 //UI数据交换
 class TimerData{

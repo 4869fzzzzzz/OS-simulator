@@ -1,6 +1,6 @@
 #include "../include/client.h"
 
-void snapshotSend(InterruptType t,int p,int q){
+void snapshotSend(InterruptType t,int v1,int v2,std::string v3,int* v4, int v5){
     std::string frame;
     frame+=std::string(timeToChar(get_startSysTime()));
     frame+=',';

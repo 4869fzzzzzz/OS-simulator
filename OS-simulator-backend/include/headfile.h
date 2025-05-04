@@ -19,6 +19,7 @@
 #include <ctime>
 #include <stdlib.h>
 #include <winsock2.h>
+#include <sstream>
 #include "rapidjson/document.h"
 #include "rapidjson/writer.h"
 #include "rapidjson/stringbuffer.h"
