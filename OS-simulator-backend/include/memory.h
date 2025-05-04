@@ -14,19 +14,17 @@ typedef unsigned int page;        // 页面号
 
 static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_t大小与指针不一致");
 
-#define PAGE_TABLE_SIZE 1024 * 128  // 页表最大项数
-#define V_PAGE_USE_SIZE 16 * 1024   // 虚拟页数量
-#define PAGE_SIZE 4096              // 单个页面大小（4KB）
-#define P_PAGE_USE_SIZE 4 * 1024    // 物理页数量
-#define USE_RECORD_SIZE 1024 * 16   // 内存使用记录项数
-#define FULL (1 << 24) - 1          // 表示未分配状态的标志
-#define SWAP_SIZE 4 * 1024          // 交换空间大小
-#define SWAP_START 1024 * 1024 * 128 // 交换区起始地址
-#define MEMORY_SIZE 1024 * 1024 * 132 // 物理内存大小
-#define page_bit unsigned char      // 页标志位
-#define DISK_SIZE 1024 * 1024 * 512 // 模拟磁盘大小
-#define DEVICE_BUFFER_START (MEMORY_SIZE - 1024 * 16) // 设备缓冲区起始地址 待定
-#define DEVICE_BUFFER_SIZE (1024 * 16) // 设备缓冲区大小 待定
+#define PAGE_TABLE_SIZE 128       // 页表最大项数
+#define V_PAGE_USE_SIZE 20        // 虚拟页数量
+#define PAGE_SIZE 4096            // 单个页面大小（4KB）
+#define P_PAGE_USE_SIZE 9         // 物理页数量
+#define USE_RECORD_SIZE 16        // 内存使用记录项数
+#define FULL (1 << 24) - 1        // 表示未分配状态的标志
+#define MEMORY_SIZE (P_PAGE_USE_SIZE * PAGE_SIZE) // 物理内存大小
+#define page_bit unsigned char    // 页标志位
+#define DISK_SIZE (1024 * 1024)   // 模拟磁盘大小
+#define DEVICE_BUFFER_START (MEMORY_SIZE - 0) // 设备缓冲区起始地址 待定
+#define DEVICE_BUFFER_SIZE 0   // 设备缓冲区大小 待定
 
 //页表项
 struct PageTableItem {
@@ -53,14 +51,12 @@ struct Device {
     v_address buffer_address; // 设备的缓冲区地址
 };
 
-
-
 //内存管理数据
 extern PageTableItem page_table[PAGE_TABLE_SIZE]; // 页表
 extern page_bit v_page[V_PAGE_USE_SIZE];         // 虚拟页面使用情况 1已分配 0未分配
 extern page_bit p_page[P_PAGE_USE_SIZE];         // 物理页面使用情况
 extern Frame* clock_hand;                        // Clock 置换算法的指针
-extern atom_data memory[MEMORY_SIZE + SWAP_SIZE];// 物理内存 + 交换空间
+extern atom_data memory[MEMORY_SIZE];            // 物理内存
 extern atom_data disk[DISK_SIZE];                // 模拟磁盘
 
 //初始化内存管理模块
@@ -131,6 +127,11 @@ int page_out(p_address p_addr, m_pid pid);
 
 //将内存状态发给ui
 int sendMemoryStatusToUI();
+
+int translate_address();
+void trigger_page_fault_interrupt();
+int read_instruction();
+void print_memory_usage();
 
 //测试函数
 void test_memory();
