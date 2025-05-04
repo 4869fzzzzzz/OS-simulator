@@ -2,7 +2,7 @@
 #include "../include/socket.h"
 #include "../include/client.h"
 
-//新的中断处理函数参数 1.uint32 2.int32 3.string 4.int* 5.int32
+//新的中断处理函数参数 1.int32 2.int32 3.string 4.int* 5.int32
 
 InterruptVector InterruptVectorTable[InterruptVectorTableSize]; //中断向量表
 std::mutex iq; //中断队列锁
@@ -27,12 +27,7 @@ void Interrupt_Init(){ //中断初始化
     |1<<static_cast<int>(InterruptType::PAGEFAULT)
     |1<<static_cast<int>(InterruptType::TEST)
     |1<<static_cast<int>(InterruptType::MERROR);
-    /*std::cout<<std::bitset<16>(valid)<<"中文"<<std::endl;
-    if (valid&1<<static_cast<int>(InterruptType::SOFTWARE))
-    {
-        std::cout<<"有效"<<std::endl;
-    }*/
-    //初始化中断向量表
+
     InterruptVector Timer(noHandle, static_cast<int>(InterruptType::TIMER));
     InterruptVectorTable[static_cast<int>(InterruptType::TIMER)]=Timer;
     InterruptVector Device(noHandle, static_cast<int>(InterruptType::DEVICE));
@@ -61,15 +56,16 @@ void Interrupt_Init(){ //中断初始化
     time_cnt.store(0);
     th[0]=std::thread(TimeThread,Normal_Timer_Interval);
     th[0].detach();
+    //待添加一个接受前端指令的进程
 }
 
-void noHandle(InterruptType type,int p,int q){};
-void errorHandle(InterruptType type,int p,int q){
+void noHandle(InterruptType type,int v1,int v2,std::string v3,int* v4, int v5){};
+void errorHandle(InterruptType type,int v1,int v2,std::string v3,int* v4, int v5){
     exit(99);
 }
 //中断产生
-void raiseInterrupt(InterruptType t, int device_id, int value){
-    Interrupt itp(t,device_id,value);
+void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int v5){
+    Interrupt itp(t, v1, v2, v3, v4, v5);
     if(handleFlag.load()){
         readyInterruptQueue.push(itp);
     }else{
@@ -84,7 +80,7 @@ void handleInterrupt(){
     while(!InterruptQueue.empty()){
         Interrupt tmp=InterruptQueue.top();
         InterruptQueue.pop();
-        InterruptVectorTable[static_cast<int>(tmp.type)].handler(tmp.type,tmp.device_id,tmp.value);
+        InterruptVectorTable[static_cast<int>(tmp.type)].handler(tmp.type,tmp.value1,tmp.value2,tmp.value3,tmp.value4,tmp.value5);
     }
     iq.lock();
     while(!readyInterruptQueue.empty()){
@@ -148,11 +144,11 @@ void TimeThread(int interval = Normal_Timer_Interval) {
     while (!stopTimerFlag.load()) {
         //std::cout << "Timer thread running..." << std::endl; // 调试输出
         if (timerInterruptValid.load()) {
-            raiseInterrupt(InterruptType::TIMER, 0, 0);
+            raiseInterrupt(InterruptType::TIMER, 0, 0, "", nullptr, 0);
         }
         time_cnt.fetch_add(1);
         if((valid.load()|1<<static_cast<int>(InterruptType::SNAPSHOT))&&time_cnt.load()%10==0){
-            raiseInterrupt(InterruptType::SNAPSHOT,0,0);
+            raiseInterrupt(InterruptType::SNAPSHOT, 0, 0, "", nullptr, 0);
         }
         nowSysTime =startSysTime+(time_cnt.load()*interval)/ 1000; // interval 是毫秒，转换为秒
         //std::cout << timeToChar(nowSysTime) << std::endl;
@@ -176,6 +172,100 @@ time_t get_nowSysTime(){
     return nowSysTime;
 }
 
+//运行一条指令
 void RUN(std::string cmd){
-    
+    std::vector<std::string> scmd;
+    CmdSplit(cmd,scmd);
+    if(scmd.size()<2)
+        raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+    else{
+        std::string cmdType=scmd[0];
+        uint32_t ntime=stoi(scmd[1]);
+        if(cmdType=="CREATEFILE"){
+            if(scmd.size()<4)
+                raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            else{
+                std::string cata=scmd[2];
+                std::string filename=scmd[3];
+
+            }
+
+        }else if(cmdType=="DELETEFILE"){
+            if(scmd.size()<4)
+                raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            else{
+                std::string cata=scmd[2];
+                std::string filename=scmd[3];
+            }
+
+        }else if(cmdType=="CALCULATE"){
+            
+
+        }else if(cmdType=="INPUT"){
+            if(scmd.size()<3)
+                raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            else{
+                //产生设备中断，后续补充
+                int deviceid=stoi(scmd[2]);
+
+            }
+
+        }else if(cmdType=="OUTPUT"){
+            if(scmd.size()<3)
+                raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            else{
+                //产生设备中断，后续补充
+                int deviceid=stoi(scmd[2]);
+                
+            }
+
+        }else if(cmdType=="READFILE"){
+            if(scmd.size()<4)
+                raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            else{
+                std::string cata=scmd[2];
+                std::string filename=scmd[3];
+
+            }
+
+        }else if(cmdType=="WRITEFILE"){
+            if(scmd.size()<4)
+                raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            else{
+                std::string cata=scmd[2];
+                std::string filename=scmd[3];
+
+            }
+
+        }else if(cmdType=="BLOCK"){
+            if(scmd.size()<3)
+                raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            else{
+                int tpid=stoi(scmd[2]);
+                
+            }
+
+        }else if(cmdType=="WAKE"){
+            if(scmd.size()<3)
+                raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            else{
+                int tpid=stoi(scmd[2]);
+                
+            }
+        }else{
+            raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+        }
+    }
+}
+//分割指令
+void CmdSplit(std::string cmd,std::vector<std::string> scmd){
+    std::istringstream iss(cmd);
+    std::string tmp;
+    int i=0;
+    while(getline(iss,tmp,' ')&&i<4){
+        scmd.push_back(tmp);
+        i++;
+    }
+    getline(iss,tmp,'\n');
+    scmd.push_back(tmp);
 }
