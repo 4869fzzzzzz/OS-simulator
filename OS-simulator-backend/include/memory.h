@@ -125,13 +125,43 @@ int page_in(v_address v_addr, m_pid pid);
  */
 int page_out(p_address p_addr, m_pid pid);
 
+/**
+ * @brief 处理缺页中断
+ * @param pid 进程ID
+ * @param v_addr 虚拟地址
+ * @param info 缺页信息
+ * @param data 返回数据（可选）
+ * @param flag 标志位
+ */
+void Pagefault(int pid, int v_addr, std::string info, int* data, int flag);
+
+/**
+ * @brief 地址转换，将虚拟地址转换为物理地址
+ * @param v_addr 虚拟地址
+ * @param pid 进程ID
+ * @param p_addr 返回的物理地址
+ * @return 成功返回0，失败返回错误码
+ */
+int translate_address(v_address v_addr, m_pid pid, p_address* p_addr);
+
+/**
+ * @brief 从指定虚拟地址读取指令
+ * @param instruction_buffer 指令缓冲区
+ * @param max_size 缓冲区最大大小
+ * @param v_addr 虚拟地址
+ * @param pid 进程ID
+ * @param bytes_read 实际读取的字节数
+ * @return 成功返回0，需要更多数据返回1，失败返回-1
+ */
+int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr, m_pid pid, size_t* bytes_read);
+
+/**
+ * @brief 打印内存使用情况
+ */
+void print_memory_usage();
+
 //将内存状态发给ui
 int sendMemoryStatusToUI();
-
-int translate_address();
-void trigger_page_fault_interrupt();
-int read_instruction();
-void print_memory_usage();
 
 //测试函数
 void test_memory();
