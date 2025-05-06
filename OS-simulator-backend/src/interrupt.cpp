@@ -472,11 +472,33 @@ void cpu_worker(CPU& cpu) {
                 }
             } else {
                 // 从内存读取指令
-                bool flag = read_instruction();
-                //分析指令结果，主要是分配当前指令的运行时间
+                char instruction_buffer[256] = {0};
+                size_t bytes_read = 0;
+                bool flag = read_instruction(instruction_buffer, sizeof(instruction_buffer), 
+                    current_pcb->address, current_pcb->pid, &bytes_read);
+                if (bytes_read > 0) {
+                    // 解析指令
+                    std::string instruction(instruction_buffer);
+                    current_pcb->instructions.push(instruction);
+        
+                    // 更新程序计数器
+                    current_pcb->address += bytes_read;
+        
+                    // 分析指令并分配时间片
+                    std::vector<std::string> parts;
+                    CmdSplit(instruction, parts);
+                    if (parts.size() >= 2) {
+                        try {
+                            current_pcb->current_instruction_time = std::stoi(parts[1]);
+                        } catch (const std::exception& e) {
+                            current_pcb->current_instruction_time = 1; // 默认时间片
+                        }
+                    } else {
+                        current_pcb->current_instruction_time = 1; // 默认时间片
+                    }
+                }
 
-
-                if (flag) {//未运行完，读取命令成功
+                if (flag==0) {//未运行完，读取命令成功
                     std::lock_guard<std::mutex> lock(ready_list_mutex);
                     //这里的逻辑已经实现了RR，短期调度只需要调整队列内部顺序即可
                     // 进程继续执行，重新加入就绪队列
@@ -485,7 +507,7 @@ void cpu_worker(CPU& cpu) {
                     } else {
                         readyList1.push_back(*current_pcb);
                     }
-                }else if (flag<0){//缺页
+                }else if (flag==-1){//缺页
                     raiseInterrupt(InterruptType::PAGEFAULT, current_pcb->pid,current_pcb->address,"",nullptr,0);
                     if(cpu.id==0) {
                         readyList0.push_back(*current_pcb);

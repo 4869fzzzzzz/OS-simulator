@@ -8,6 +8,7 @@
 #include <WinNls.h>
 #include <string>
 #include <iomanip>
+#include "../include/interrupt.h"
 
 using namespace std;
 
@@ -341,7 +342,7 @@ int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
     
     return 0;
     }
-/*void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
+void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
         // 处理缺页中断的逻辑
         std::cout << "[PAGEFAULT] Process " << pid << " triggered a page fault at virtual address: " << v_addr << std::endl;
         std::cout << "Info: " << info << std::endl;
@@ -356,9 +357,9 @@ int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
         if (page_in(v_addr, pid) != 0) {
             std::cerr << "[ERROR] Failed to handle page fault for process " << pid << std::endl;
         }
-    }*/
+    }
 
-//0 成功读取一行指令;-1 缺页异常;-2 缺页异常
+//0 成功读取一行指令;-1 缺页异常;-2 结尾
 int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr, m_pid pid, size_t* bytes_read) {
         p_address p_addr;
         int result = translate_address(v_addr, pid, &p_addr);
