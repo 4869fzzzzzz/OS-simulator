@@ -188,92 +188,111 @@ time_t get_nowSysTime(){
 
 
 //运行一条指令
-void RUN(std::string cmd){
+bool RUN(std::string cmd){
     std::vector<std::string> scmd;
     CmdSplit(cmd,scmd);
-    if(scmd.size()<2)
+    if(scmd.size()<2){
         raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+        return false;
+    }
     else{
         std::string cmdType=scmd[0];
         uint32_t ntime=stoi(scmd[1]);
         if(cmdType=="CREATEFILE"){
-            if(scmd.size()<4)
+            if(scmd.size()<4){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+                return true;
+            }
             else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
                 fs.createFile(cata,filename,0,128);
-                
+                return true;
             }
 
         }else if(cmdType=="DELETEFILE"){
-            if(scmd.size()<4)
+            if(scmd.size()<4){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+                return true;
+            }
             else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
                 fs.deleteFile(cata, filename);
+                return true;
             }
 
         }else if(cmdType=="CALCULATE"){
             ;
+            return true;
         }else if(cmdType=="INPUT"){
-            if(scmd.size()<3)
+            if(scmd.size()<3){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
-            else{
+                return false;
+            }else{
                //产生设备中断，后续补充
                 int deviceid=stoi(scmd[2]);
 
             }
 
         }else if(cmdType=="OUTPUT"){
-            if(scmd.size()<3)
+            if(scmd.size()<3){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
-            else{
+                return false;
+            }else{
                 //产生设备中断，后续补充
                 int deviceid=stoi(scmd[2]);
                 
             }
 
         }else if(cmdType=="READFILE"){
-            if(scmd.size()<4)
+            if(scmd.size()<4){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
-            else{
+                return true;
+            }else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
                 fs.readFile(cata, filename);
+                return true;
             }
 
         }else if(cmdType=="WRITEFILE"){
-            if(scmd.size()<4)
+            if(scmd.size()<4){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+                return true;
+            }
             else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
                 std::string content=scmd[4];
                 fs.writeFile(cata, filename, content);
-
+                return true;
             }
 
         }else if(cmdType=="BLOCK"){
-            if(scmd.size()<3)
+            if(scmd.size()<3){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
-            else{
+                return true;
+            }else{
                 int tpid=stoi(scmd[2]);
                 
+                return true;
             }
 
         }else if(cmdType=="WAKE"){
-            if(scmd.size()<3)
+            if(scmd.size()<3){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
-            else{
+                return true;
+            }else{
                 int tpid=stoi(scmd[2]);
-                
+                return true;
             }
         }else{
             raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
+            return true;
         }
     }
+    return true;
 }
 //分割指令
 void CmdSplit(const std::string& cmd, std::vector<std::string>& scmd) {
@@ -435,16 +454,32 @@ void cpu_worker(CPU& cpu) {
             if (current_pcb->has_instruction()) {
                 if (current_pcb->current_instruction_time == 1) {
                     // 执行指令
-                    RUN(current_pcb->get_current_instruction());
-                    current_pcb->instructions.pop();
+                    if (RUN(current_pcb->get_current_instruction())) {
+                        //此处成功执行才会继续执行下一条指令
+                        //主要是为了设备申请指令能够重复申请，避免一次未成功申请就跳出的情况
+                        //只有设备申请失败会返回false以重新申请，其他指令执行失败会触发错误中断处理
+                        current_pcb->instructions.pop();
+                    } else {
+                        current_pcb->apply_time++;
+                        current_pcb->current_instruction_time = 1;
+                        if(current_pcb->apply_time>MAX_APPLY_TIME){
+                            //此处申请设备次数超过最大次数，处理逻辑待定
+                            
+                        }
+                    }
                 } else {
                     current_pcb->current_instruction_time--;
                 }
             } else {
                 // 从内存读取指令
                 bool flag = read_instruction();
+                //分析指令结果，主要是分配当前指令的运行时间
+
+
                 if (flag) {//未运行完，读取命令成功
                     std::lock_guard<std::mutex> lock(ready_list_mutex);
+                    //这里的逻辑已经实现了RR，短期调度只需要调整队列内部顺序即可
+                    // 进程继续执行，重新加入就绪队列
                     if(cpu.id==0) {
                         readyList0.push_back(*current_pcb);
                     } else {
@@ -452,12 +487,17 @@ void cpu_worker(CPU& cpu) {
                     }
                 }else if (flag<0){//缺页
                     raiseInterrupt(InterruptType::PAGEFAULT, current_pcb->pid,current_pcb->address,"",nullptr,0);
+                    if(cpu.id==0) {
+                        readyList0.push_back(*current_pcb);
+                    } else {
+                        readyList1.push_back(*current_pcb);
+                    }
                 }else{//进程已经运行完毕
                     // 释放当前进程资源
                     delete current_pcb;
                     current_pcb = nullptr;
                 }
-                
+                current_pcb->apply_time = 0;
             }
             
             cpu.busy = false;
