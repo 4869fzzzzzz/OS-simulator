@@ -10,6 +10,16 @@
 #define InterruptVectorTableSize 32 //中断向量表的大小
 #define Normal_Timer_Interval 100 //默认时钟中断的间隔
 
+
+extern std::atomic<uint16_t> valid; //valid的每个二进制位代表对应的中断类型是否有效
+extern std::atomic<bool> timerInterruptValid; //时钟中断是否有效标志,时钟在单独的线程运行，这里仅控制时钟是否产生中断，不能控制时钟线程是否存在
+extern std::atomic<bool> stopTimerFlag; //直接停止时钟中断线程
+extern std::atomic<bool> handleFlag;
+extern std::atomic<long long> time_cnt;
+extern std::thread th[2];
+extern std::atomic<int> interrupt_handling_cpus;  // 记录正在处理中断的CPU数量
+
+
 enum class InterruptType { //枚举中断类型-类型的数值用于标注在中断向量表中的位置
     TIMER = 0,
     DEVICE = 1, //设备采用中断触发
@@ -65,16 +75,7 @@ struct InterruptComparator {
     }//数字越大优先级越高
 };
 
-
 extern std::priority_queue<Interrupt, std::vector<Interrupt>, InterruptComparator> InterruptQueue; //中断等待队列
-
-extern std::atomic<uint16_t> valid; //valid的每个二进制位代表对应的中断类型是否有效
-extern std::atomic<bool> timerInterruptValid; //时钟中断是否有效标志,时钟在单独的线程运行，这里仅控制时钟是否产生中断，不能控制时钟线程是否存在
-extern std::atomic<bool> stopTimerFlag; //直接停止时钟中断线程
-extern std::atomic<bool> handleFlag;
-extern std::atomic<long long> time_cnt;
-extern std::thread th[2];
-extern std::atomic<int> interrupt_handling_cpus{0};  // 记录正在处理中断的CPU数量
 
 //设置中断屏蔽函数
 

@@ -37,6 +37,7 @@ struct Directory {
     Directory* parent;         // 指向父目录
 };
 
+
 // 文件系统类
 class FileSystem {
 private:
@@ -79,3 +80,5 @@ public:
     void printFreeSpaceList(); // 打印空闲空间信息
     void printUtilizationRate(); // 打印外存使用率
 };
+
+FileSystem fs(1024,4);
