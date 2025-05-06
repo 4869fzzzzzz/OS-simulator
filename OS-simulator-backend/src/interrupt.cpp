@@ -405,6 +405,8 @@ void cpu_worker(CPU& cpu) {
     cpu.running = true;
     while (cpu.running) {
         PCB* current_pcb = nullptr;
+        //短期调度
+        
         
         // 获取就绪进程
         {

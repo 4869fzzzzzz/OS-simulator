@@ -23,7 +23,7 @@ int main(){
     
     CPU cpu0(0),cpu1(1);
     PCB npcb;
-    std::thread cpu0_thread(cpu_worker, std::ref(cpu0));
+    std::thread cpu0_thread(cpu_worker, std::ref(cpu0));//短期调度在该线程内执行
     std::thread cpu1_thread(cpu_worker, std::ref(cpu1));
 
 
@@ -31,11 +31,11 @@ int main(){
     while(1){
         //处理客户端请求
         serverSocket.HandleConnection();
-        //创建进程PCB，长期调度（取消某些进程申请的内存）
+        //长期调度（取消某些进程申请的内存），创建PCB
 
         //若内存未满，为没有内存的PCB申请内存
 
-        //中期调度，选出要运行的PCB?
+        //中期调度
 
         /*
         npcb=readyList.front();
