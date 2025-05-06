@@ -201,7 +201,16 @@ void setup_frame_list() {
         clock_hand = clock_hand->next;
     }
 }
-
+void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
+    // 处理缺页中断的逻辑
+    std::cout << "[PAGEFAULT] Process " << pid << " triggered a page fault at virtual address: " << v_addr << std::endl;
+    std::cout << "Info: " << info << std::endl;
+    std::cout << "Flag: " << flag << std::endl;
+    // 调用 page_in 函数将页面加载到内存
+    if (page_in(v_addr, pid) != 0) {
+        std::cerr << "[ERROR] Failed to handle page fault for process " << pid << std::endl;
+    }
+}
 // 释放指定进程的所有页表项及占用的物理页
 void free_pt_by_pid(m_pid pid) {
     for (int i = 0; i < PAGE_TABLE_SIZE; ++i) {
@@ -221,7 +230,10 @@ void free_pt_by_pid(m_pid pid) {
 int read_memory(atom_data* data, v_address address, m_pid pid) {
     page v_page_num = address / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
-    if (!pt.in_memory) return -1; // 页不在内存中
+    if (!pt.in_memory) {
+        Pagefault(pid, address, "Page not in memory during read", nullptr, 0);
+        return -1; // 返回错误码
+    } // 页不在内存中
     *data = memory[pt.p_id * PAGE_SIZE + (address % PAGE_SIZE)];
     pt.used = true; // 标记为访问过
     return 0;
@@ -231,7 +243,10 @@ int read_memory(atom_data* data, v_address address, m_pid pid) {
 int write_memory(atom_data data, v_address address, m_pid pid) {
     page v_page_num = address / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
-    if (!pt.in_memory) return -1; // 页不在内存中
+    if (!pt.in_memory) {
+        Pagefault(pid, address, "Page not in memory during write", nullptr, 0);
+        return -1; // 返回错误码
+    }
     memory[pt.p_id * PAGE_SIZE + (address % PAGE_SIZE)] = data;
     pt.used = true; // 标记为访问过
     return 0;
@@ -321,7 +336,7 @@ int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
     
     // 如果页面不在内存中，返回缺页错误
     if (!pt.in_memory) {
-        std::cout << "[DEBUG] Page fault: Virtual page " << v_page_num << " not in memory" << std::endl;
+        Pagefault(pid, v_addr, "Page not in memory", nullptr, 0);
         return -2; // 特别标识缺页错误
     }
     // 计算物理地址
@@ -335,10 +350,6 @@ int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
     
     return 0;
     }
-void trigger_page_fault_interrupt(m_pid pid, v_address v_addr) {
-    // 触发缺页中断，将进程ID和虚拟地址作为参数传递给中断处理函数
-    //raiseInterrupt(InterruptType::PAGEFAULT, static_cast<int>(pid), static_cast<int>(v_addr));
-}
 int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr, m_pid pid, size_t* bytes_read) {
         // 首先尝试进行地址翻译
         p_address p_addr;
@@ -346,7 +357,7 @@ int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr
         
         if (result == -2) { // 缺页情况
             // 触发缺页中断
-            trigger_page_fault_interrupt(pid, v_addr);//传给中断模块
+            Pagefault(pid, v_addr, "Page fault during instruction read", nullptr, 0);
             return -1;
         } else if (result != 0) { // 其他错误
             std::cerr << "[ERROR] Failed to translate address 0x" << std::hex << v_addr << std::dec << std::endl;
