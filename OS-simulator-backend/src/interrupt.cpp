@@ -1,6 +1,4 @@
 #include "../include/interrupt.h"
-#include "../include/socket.h"
-#include "../include/client.h"
 
 //新的中断处理函数参数 1.int32 2.int32 3.string 4.int* 5.int32
 
@@ -258,14 +256,130 @@ void RUN(std::string cmd){
     }
 }
 //分割指令
-void CmdSplit(std::string cmd,std::vector<std::string> scmd){
+void CmdSplit(const std::string& cmd, std::vector<std::string>& scmd) {
     std::istringstream iss(cmd);
     std::string tmp;
-    int i=0;
-    while(getline(iss,tmp,' ')&&i<4){
+    int word_count = 0;
+    
+    // 读取前3个词
+    while (word_count < 3 && iss >> tmp) {
         scmd.push_back(tmp);
-        i++;
+        word_count++;
     }
-    getline(iss,tmp,'\n');
-    scmd.push_back(tmp);
+    
+    // 读取第4个词（如果存在）
+    if (iss >> tmp) {
+        scmd.push_back(tmp);
+        word_count++;
+        
+        // 读取剩余所有内容作为最后一个词
+        std::string remaining;
+        std::getline(iss, remaining);
+        
+        if (!remaining.empty()) {
+            // 删除开头的空格
+            remaining = remaining.substr(remaining.find_first_not_of(" \t"));
+            if (!remaining.empty()) {
+                scmd.push_back(remaining);
+            }
+        }
+    }
+}
+bool handleClientCmd(std::string cmd, std::string& result) {
+    std::vector<std::string> scmd;
+    CmdSplit(cmd, scmd);
+    std::string cmdType = scmd[0];
+    if(cmdType == "C"){
+        //创建文件
+        if(scmd.size() < 3){
+            std::cout << "Invalid command: " << cmdType << std::endl;
+            return false;
+        }
+        std::string cata = scmd[1];
+        std::string filename = scmd[2];
+        if(createFile(cata,filename,0,0)){
+            std::cout << "Create file success: " << filename << std::endl;
+            result = "Create file success: " + filename;
+            return true;
+        }else{
+            std::cout << "Create file failed: " << filename << std::endl;
+            result = "Create file failed: " + filename;
+            return false;
+        }
+    }else if(cmdType == "D"){
+        //删除文件
+        if(scmd.size() < 3){
+            std::cout << "Invalid command: " << cmdType << std::endl;
+            result = "Invalid command: " + cmdType;
+            return false;
+        }
+        std::string cata = scmd[1];
+        std::string filename = scmd[2];
+        if(deleteFile(cata,filename)){
+            std::cout << "Delete file success: " << filename << std::endl;
+            result = "Delete file success: " + filename;
+            return true;
+        }else{
+            std::cout << "Delete file failed: " << filename << std::endl;
+            result = "Delete file failed: " + filename;
+            return false;
+        }
+        
+    }else if(cmdType == "W"){
+        //写文件
+        if(scmd.size() < 4){
+            std::cout << "Invalid command: " << cmdType << std::endl;
+            return false;
+        }
+        std::string cata = scmd[1];
+        std::string filename = scmd[2];
+        std::string content = scmd[3];
+        if(writeFile(cata,filename,content)){
+            std::cout << "Write file success: " << filename << std::endl;
+            result = "Write file success: " + filename;
+            return true;
+        }else{
+            std::cout << "Write file failed: " << filename << std::endl;
+            result = "Write file failed: " + filename;
+            return false;
+        }
+
+    }else if(cmdType == "R"){
+        //读文件
+        if(scmd.size() < 3){
+            std::cout << "Invalid command: " << cmdType << std::endl;
+            return false;
+        }
+        std::string cata = scmd[1];
+        std::string filename = scmd[2];
+        std::string content = readFile(cata, filename);
+        if(!content.empty()){
+            std::cout << "Read file success: " << filename << std::endl;
+            std::cout << "Content: " << content << std::endl;
+            result = "Read file success: " + filename + "\nContent: " + content;
+            return true;
+        }else{
+            std::cout << "Read file failed: " << filename << std::endl;
+            result = "Read file failed: " + filename;
+            return false;
+        }
+
+    }else if(cmdType == "P"){
+        //创建进程
+
+    }else if(cmdType == "B"){
+        //阻塞进程
+
+    }else if(cmdType == "K"){
+        //唤醒进程
+
+    }else if(cmdType == "E"){
+        //退出系统
+        exit(10);
+    }
+    else{
+        std::cout << "Invalid command: " << cmdType << std::endl;
+        return false;
+    }
+    return true;
 }

@@ -1,5 +1,11 @@
 #pragma once
 #include "./headfile.h"
+#include "./socket.h"
+#include "./client.h"
+#include "./process.h"
+#include "./memory.h"
+#include "./device.h"
+#include "./filesystem.h"
 
 #define InterruptVectorTableSize 32 //中断向量表的大小
 #define Normal_Timer_Interval 100 //默认时钟中断的间隔
@@ -102,8 +108,8 @@ time_t get_nowSysTime();
 void Interrupt_Init(); //中断初始化
 
 void RUN(std::string cmd);//运行一条指令
-void CmdSplit(std::string cmd,std::vector<std::string> scmd);//划分指令
-
+void CmdSplit(std::string& cmd,std::vector<std::string>& scmd);//划分指令
+bool handleClientCmd(std::string cmd, std::string& result);
 //UI数据交换
 class TimerData{
 public:
