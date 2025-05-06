@@ -14,6 +14,7 @@ std::queue<Interrupt> readyInterruptQueue;//存储在中断执行过程中产生
 time_t startSysTime;
 time_t nowSysTime;
 std::thread th[2];
+std::atomic<int> interrupt_handling_cpus{0};  // 记录正在处理中断的CPU数量
 
 void Interrupt_Init(){ //中断初始化
     //初始化中断有效位
@@ -36,8 +37,8 @@ void Interrupt_Init(){ //中断初始化
     InterruptVectorTable[static_cast<int>(InterruptType::SNAPSHOT)]=Snapshot;
     InterruptVector Non_maskable(noHandle, static_cast<int>(InterruptType::NON_MASKABLE));
     InterruptVectorTable[static_cast<int>(InterruptType::NON_MASKABLE)]=Non_maskable;
-    InterruptVector Pagefault(noHandle, static_cast<int>(InterruptType::PAGEFAULT));
-    InterruptVectorTable[static_cast<int>(InterruptType::PAGEFAULT)]=Pagefault;
+    InterruptVector PageFault(Pagefault, static_cast<int>(InterruptType::PAGEFAULT));
+    InterruptVectorTable[static_cast<int>(InterruptType::PAGEFAULT)]=PageFault;
     InterruptVector Test(noHandle, static_cast<int>(InterruptType::TEST));
     InterruptVectorTable[static_cast<int>(InterruptType::TEST)]=Test;
     InterruptVector Error(errorHandle, static_cast<int>(InterruptType::MERROR));
@@ -57,8 +58,8 @@ void Interrupt_Init(){ //中断初始化
     //待添加一个接受前端指令的进程
 }
 
-void noHandle(InterruptType type,int v1,int v2,std::string v3,int* v4, int v5){};
-void errorHandle(InterruptType type,int v1,int v2,std::string v3,int* v4, int v5){
+void noHandle(int v1,int v2,std::string v3,int* v4, int v5){};
+void errorHandle(int v1,int v2,std::string v3,int* v4, int v5){
     exit(99);
 }
 //中断产生
@@ -74,11 +75,22 @@ void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int 
 }
 //中断处理
 void handleInterrupt(){
+    // 增加处理中断的CPU计数
+    interrupt_handling_cpus++;
+    // 等待另一个CPU也进入中断处理
+    while (interrupt_handling_cpus < 2) {
+        std::this_thread::yield();
+    }
     handleFlag.store(1);
     while(!InterruptQueue.empty()){
+        iq.lock();
+        if (InterruptQueue.empty()) {
+            return;
+        }
         Interrupt tmp=InterruptQueue.top();
         InterruptQueue.pop();
-        InterruptVectorTable[static_cast<int>(tmp.type)].handler(tmp.type,tmp.value1,tmp.value2,tmp.value3,tmp.value4,tmp.value5);
+        iq.unlock();
+        InterruptVectorTable[static_cast<int>(tmp.type)].handler(tmp.value1,tmp.value2,tmp.value3,tmp.value4,tmp.value5);
     }
     iq.lock();
     while(!readyInterruptQueue.empty()){
@@ -87,6 +99,8 @@ void handleInterrupt(){
         readyInterruptQueue.pop();
     }
     iq.unlock();
+    // 减少处理中断的CPU计数
+    interrupt_handling_cpus--;
     handleFlag.store(0);
 }
 //工具函数
@@ -169,6 +183,9 @@ time_t get_startSysTime(){
 time_t get_nowSysTime(){
     return nowSysTime;
 }
+
+//以下为主程序函数
+
 
 //运行一条指令
 void RUN(std::string cmd){
@@ -383,3 +400,71 @@ bool handleClientCmd(std::string cmd, std::string& result) {
     }
     return true;
 }
+
+void cpu_worker(CPU& cpu) {
+    cpu.running = true;
+    while (cpu.running) {
+        PCB* current_pcb = nullptr;
+        
+        // 获取就绪进程
+        {
+            std::lock_guard<std::mutex> lock(ready_list_mutex);
+            if(cpu.id==0){
+                if (!readyList0.empty()) {
+                    current_pcb = &readyList0.front();
+                    readyList0.pop_front();
+                    cpu.busy = true;
+                    cpu.running_process = current_pcb;
+                }
+            }else{
+                if (!readyList1.empty()) {
+                    current_pcb = &readyList1.front();
+                    readyList1.pop_front();
+                    cpu.busy = true;
+                    cpu.running_process = current_pcb;
+                }
+            }
+        }
+        // 处理当前进程
+        if (current_pcb != nullptr) {
+            if (current_pcb->has_instruction()) {
+                if (current_pcb->current_instruction_time == 1) {
+                    // 执行指令
+                    RUN(current_pcb->get_current_instruction());
+                    current_pcb->instructions.pop();
+                } else {
+                    current_pcb->current_instruction_time--;
+                }
+            } else {
+                // 从内存读取指令
+                bool flag = read_instruction();
+                if (flag) {//未运行完，读取命令成功
+                    std::lock_guard<std::mutex> lock(ready_list_mutex);
+                    if(cpu.id==0) {
+                        readyList0.push_back(*current_pcb);
+                    } else {
+                        readyList1.push_back(*current_pcb);
+                    }
+                }else if (flag<0){//缺页
+                    raiseInterrupt(InterruptType::PAGEFAULT, current_pcb->pid,current_pcb->address,"",nullptr,0);
+                }else{//进程已经运行完毕
+                    // 释放当前进程资源
+                    delete current_pcb;
+                    current_pcb = nullptr;
+                }
+                
+            }
+            
+            cpu.busy = false;
+            cpu.running_process = nullptr;
+        }
+        
+        // 处理中断
+        if (!InterruptQueue.empty()) {
+            handleInterrupt();
+        }
+        
+        
+        
+    }
+};
