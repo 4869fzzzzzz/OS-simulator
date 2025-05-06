@@ -21,8 +21,13 @@ int main(){
         return 1;
     }
     
-    std::cout<<"主循环开始"<<std::endl;
+    CPU cpu0(0),cpu1(1);
     PCB npcb;
+    std::thread cpu0_thread(cpu_worker, std::ref(cpu0));
+    std::thread cpu1_thread(cpu_worker, std::ref(cpu1));
+
+
+    //该循环仅用来处理客户端请求以及长期和中期调度
     while(1){
         //处理客户端请求
         serverSocket.HandleConnection();
@@ -32,6 +37,7 @@ int main(){
 
         //中期调度，选出要运行的PCB?
 
+        /*
         npcb=readyList.front();
         if(1){//这里修改成，进程有要运行的指令
             if(1)//当前指令剩余所需时间片只剩1；由于指令运行实际只需一个时间片，而这里设定是需要多个时间片因此统一在时间片仅剩1时运行指令
@@ -44,7 +50,14 @@ int main(){
             //这里根据内存提供的地址以及偏移量读入指令，指令以\n分割
             //read_memory();这个函数的返回值决定当前进程是否运行完毕
             //如果页未调入，产生缺页中断，在后面中断处理时，进行调页处理
-        }
-        handleInterrupt();
+        }*/
+        //handleInterrupt();
     }
+
+    cpu0.running = false;
+    cpu1.running = false;
+    cpu0_thread.join();
+    cpu1_thread.join();
+
+    return 0;
 }

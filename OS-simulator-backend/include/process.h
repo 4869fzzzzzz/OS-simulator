@@ -43,7 +43,7 @@ using namespace std;
 #define FILE_SWITCH_OVER 10//文件写结束
 
 
-
+extern std::mutex ready_list_mutex;
 
 
 typedef struct process_struct {
@@ -74,6 +74,23 @@ typedef struct process_struct {
 
 
 	list<string> program;//程序段顺序执行命令
+
+	//ADD，新的指令存储队列和函数
+	std::atomic<int> current_instruction_time;
+    std::queue<std::string> instructions;
+    
+    bool has_instruction() const {
+        return !instructions.empty();
+    }
+    
+    std::string get_current_instruction() {
+        if (!instructions.empty()) {
+            std::string instr = instructions.front();
+            
+            return instr;
+        }
+        return "";
+    }
 }PCB;
 
 typedef struct mutexInfo {
@@ -81,16 +98,14 @@ typedef struct mutexInfo {
 	list<PCB> waitForFileList;//等待文件队列
 };//文件互斥锁 读写共用
 
-//当前CPU的各项状态
-typedef struct CPU {
-	int PC;//程序计数器
-	int pid;//占用CPU的PCB
-}CPU;
 
 extern list<PCB> PCBList;//总进程队列
 extern list<PCB> readyList;//就绪队列
 extern list<PCB> blockList;//阻塞队列
 extern list<PCB> suspendList;//挂起队列
+
+extern list<PCB> readyList0;//就绪队列1
+extern list<PCB> readyList1;//就绪队列2
 
 //阻塞状态队列
 extern list<PCB> waitForKeyBoardList;//等待键盘队列

@@ -17,9 +17,14 @@
 #define OUT 1
 
 using namespace std;
+
+
+std::mutex ready_list_mutex;
+
+
 int pidSum;//当前进程总数
 int Timer;
-CPU cpu;
+
 FileSystem fs(100,1024);
 bool CPUbusy;
 bool KeyBoardBusy;
@@ -31,6 +36,9 @@ list<PCB> PCBList;//总进程队列
 list<PCB> readyList;//就绪队列
 list<PCB> blockList;//阻塞队列
 list<PCB> suspendList;//挂起队列
+
+list<PCB> readyList0;//就绪队列1
+list<PCB> readyList1;//就绪队列2
 
 //阻塞状态队列
 list<PCB> waitForKeyBoardList;//等待键盘队列

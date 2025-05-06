@@ -40,7 +40,7 @@ struct Interrupt {
     }
 };
 
-typedef void (*InterruptFunc)(InterruptType, int, int, std::string, int*, int); //中断处理函数指针，参数依次为中断类型，设备id，可选值
+typedef void (*InterruptFunc)(int, int, std::string, int*, int); //中断处理函数指针，参数依次为中断类型，设备id，可选值
 
 struct InterruptVector {
     InterruptFunc handler = nullptr; //中断处理函数指针
@@ -74,7 +74,7 @@ extern std::atomic<bool> stopTimerFlag; //直接停止时钟中断线程
 extern std::atomic<bool> handleFlag;
 extern std::atomic<long long> time_cnt;
 extern std::thread th[2];
-
+extern std::atomic<int> interrupt_handling_cpus{0};  // 记录正在处理中断的CPU数量
 
 //设置中断屏蔽函数
 
@@ -98,18 +98,28 @@ void TimeThread(int interval);
 char* timeToChar(time_t time);
 struct tm* timeToStruct(time_t time);
 
-void noHandle(InterruptType type,int v1,int v2,std::string v3,int* v4, int v5);
-void errorHandle(InterruptType type,int v1,int v2,std::string v3,int* v4, int v5);
+void noHandle(int v1,int v2,std::string v3,int* v4, int v5);
+void errorHandle(int v1,int v2,std::string v3,int* v4, int v5);
 
 time_t get_startSysTime();
 time_t get_nowSysTime();
 
 
 void Interrupt_Init(); //中断初始化
+//主程序与CPU
+struct CPU {
+    int id;                     // CPU ID
+    bool busy;                  // CPU 状态
+    PCB* running_process;       // 当前运行的进程
+    std::atomic<bool> running;  // CPU 运行状态
+    
+    CPU(int cpu_id) : id(cpu_id), busy(false), running_process(nullptr), running(false) {}
+};
 
 void RUN(std::string cmd);//运行一条指令
 void CmdSplit(std::string& cmd,std::vector<std::string>& scmd);//划分指令
 bool handleClientCmd(std::string cmd, std::string& result);
+void cpu_worker(CPU& cpu);
 //UI数据交换
 class TimerData{
 public:
