@@ -201,16 +201,7 @@ void setup_frame_list() {
         clock_hand = clock_hand->next;
     }
 }
-void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
-    // 处理缺页中断的逻辑
-    std::cout << "[PAGEFAULT] Process " << pid << " triggered a page fault at virtual address: " << v_addr << std::endl;
-    std::cout << "Info: " << info << std::endl;
-    std::cout << "Flag: " << flag << std::endl;
-    // 调用 page_in 函数将页面加载到内存
-    if (page_in(v_addr, pid) != 0) {
-        std::cerr << "[ERROR] Failed to handle page fault for process " << pid << std::endl;
-    }
-}
+
 // 释放指定进程的所有页表项及占用的物理页
 void free_pt_by_pid(m_pid pid) {
     for (int i = 0; i < PAGE_TABLE_SIZE; ++i) {
@@ -231,7 +222,7 @@ int read_memory(atom_data* data, v_address address, m_pid pid) {
     page v_page_num = address / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
     if (!pt.in_memory) {
-        Pagefault(pid, address, "Page not in memory during read", nullptr, 0);
+        raiseInterrupt(InterruptType::PAGEFAULT,pid, address , "Page not in memory during read", nullptr, 0);
         return -1; // 返回错误码
     } // 页不在内存中
     *data = memory[pt.p_id * PAGE_SIZE + (address % PAGE_SIZE)];
@@ -244,7 +235,7 @@ int write_memory(atom_data data, v_address address, m_pid pid) {
     page v_page_num = address / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
     if (!pt.in_memory) {
-        Pagefault(pid, address, "Page not in memory during write", nullptr, 0);
+        raiseInterrupt(InterruptType::PAGEFAULT,pid, address , "Page not in memory during write", nullptr, 0);
         return -1; // 返回错误码
     }
     memory[pt.p_id * PAGE_SIZE + (address % PAGE_SIZE)] = data;
@@ -336,7 +327,7 @@ int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
     
     // 如果页面不在内存中，返回缺页错误
     if (!pt.in_memory) {
-        Pagefault(pid, v_addr, "Page not in memory", nullptr, 0);
+        raiseInterrupt(InterruptType::PAGEFAULT,pid, v_addr, "Page not in memory", nullptr, 0);
         return -2; // 特别标识缺页错误
     }
     // 计算物理地址
@@ -350,42 +341,60 @@ int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
     
     return 0;
     }
+/*void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
+        // 处理缺页中断的逻辑
+        std::cout << "[PAGEFAULT] Process " << pid << " triggered a page fault at virtual address: " << v_addr << std::endl;
+        std::cout << "Info: " << info << std::endl;
+        std::cout << "Flag: " << flag << std::endl;
+    
+        // 如果需要，可以通过 data 指针返回数据
+        if (data) {
+            *data = 0; // 示例：返回一个默认值
+        }
+    
+        // 调用 page_in 函数将页面加载到内存
+        if (page_in(v_addr, pid) != 0) {
+            std::cerr << "[ERROR] Failed to handle page fault for process " << pid << std::endl;
+        }
+    }*/
+
+//0 成功读取一行指令;-1 缺页异常;-2 缺页异常
 int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr, m_pid pid, size_t* bytes_read) {
-        // 首先尝试进行地址翻译
         p_address p_addr;
         int result = translate_address(v_addr, pid, &p_addr);
-        
+    
         if (result == -2) { // 缺页情况
-            // 触发缺页中断
-            Pagefault(pid, v_addr, "Page fault during instruction read", nullptr, 0);
+            raiseInterrupt(InterruptType::PAGEFAULT,pid, v_addr, "Page fault during instruction read", nullptr, 0);
             return -1;
         } else if (result != 0) { // 其他错误
             std::cerr << "[ERROR] Failed to translate address 0x" << std::hex << v_addr << std::dec << std::endl;
             return -1;
         }
-        
-        // 地址翻译成功，现在从物理地址读取数据
+    
+        // 计算当前虚拟地址在物理内存中的偏移量
         size_t available_in_page = PAGE_SIZE - (v_addr % PAGE_SIZE);
-        size_t bytes_to_read = std::min<size_t>(max_size - 1, available_in_page); // 保留一个位置给字符串终止符
-        
-        // 从物理内存读取数据
+        size_t bytes_to_read = std::min<size_t>(max_size - 1, available_in_page);
+    
+        // 从物理内存复制数据到缓冲区
         memcpy(instruction_buffer, &memory[p_addr], bytes_to_read);
-        
+    
         // 查找换行符
         char* newline_pos = static_cast<char*>(memchr(instruction_buffer, '\n', bytes_to_read));
-        
+    
         if (newline_pos) {
-            // 找到换行符，读取一条完整指令
             *newline_pos = '\0'; // 终止字符串
-            *bytes_read = newline_pos - instruction_buffer + 1; // 包括原换行符的位置
-            return 0; // 成功读取完整指令
+            *bytes_read = newline_pos - instruction_buffer + 1; // 包括换行符
+            return 0;
         } else {
-            // 未找到换行符，需要继续读取更多数据
+            // 如果没有找到换行符且剩余字节数为零，则表示已到达文件尾
+            if (bytes_to_read == 0) {
+                *bytes_read = 0;
+                return -2;
+            }
             *bytes_read = bytes_to_read;
-            return 1; // 标识需要更多数据
+            return -2;
         }
     }
-
 void print_memory_usage() {
     // 物理页统计
     size_t physical_free = 0;
@@ -809,8 +818,8 @@ void test_directory_operations() {
 
 /*int main() {
     SetConsoleOutputCP(CP_UTF8);  // 设置控制台输出为 UTF-8 编码
-    //test_memory1();
-    test_memory2();
+    test_memory1();
+    //test_memory2();
     //test_address_translation();
     //test_memory_swap();
     //test_filesystem();
