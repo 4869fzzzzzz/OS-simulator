@@ -14,7 +14,7 @@ std::queue<Interrupt> readyInterruptQueue;//存储在中断执行过程中产生
 time_t startSysTime;
 time_t nowSysTime;
 std::thread th[2];
-std::atomic<int> interrupt_handling_cpus{0};  // 记录正在处理中断的CPU数量
+std::atomic<int> interrupt_handling_cpus{0};  // 定义正在处理中断的CPU数量
 
 void Interrupt_Init(){ //中断初始化
     //初始化中断有效位
@@ -202,7 +202,8 @@ void RUN(std::string cmd){
             else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
-
+                fs.createFile(cata,filename,0,128);
+                
             }
 
         }else if(cmdType=="DELETEFILE"){
@@ -211,16 +212,16 @@ void RUN(std::string cmd){
             else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
+                fs.deleteFile(cata, filename);
             }
 
         }else if(cmdType=="CALCULATE"){
-            
-
+            ;
         }else if(cmdType=="INPUT"){
             if(scmd.size()<3)
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
             else{
-                //产生设备中断，后续补充
+               //产生设备中断，后续补充
                 int deviceid=stoi(scmd[2]);
 
             }
@@ -240,7 +241,7 @@ void RUN(std::string cmd){
             else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
-
+                fs.readFile(cata, filename);
             }
 
         }else if(cmdType=="WRITEFILE"){
@@ -249,6 +250,8 @@ void RUN(std::string cmd){
             else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
+                std::string content=scmd[4];
+                fs.writeFile(cata, filename, content);
 
             }
 
@@ -314,7 +317,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         }
         std::string cata = scmd[1];
         std::string filename = scmd[2];
-        if(createFile(cata,filename,0,0)){
+        if(fs.createFile(cata,filename,0,0)){
             std::cout << "Create file success: " << filename << std::endl;
             result = "Create file success: " + filename;
             return true;
@@ -332,7 +335,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         }
         std::string cata = scmd[1];
         std::string filename = scmd[2];
-        if(deleteFile(cata,filename)){
+        if(fs.deleteFile(cata,filename)){
             std::cout << "Delete file success: " << filename << std::endl;
             result = "Delete file success: " + filename;
             return true;
@@ -351,7 +354,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         std::string cata = scmd[1];
         std::string filename = scmd[2];
         std::string content = scmd[3];
-        if(writeFile(cata,filename,content)){
+        if(fs.writeFile(cata,filename,content)){
             std::cout << "Write file success: " << filename << std::endl;
             result = "Write file success: " + filename;
             return true;
@@ -369,7 +372,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         }
         std::string cata = scmd[1];
         std::string filename = scmd[2];
-        std::string content = readFile(cata, filename);
+        std::string content = fs.readFile(cata, filename);
         if(!content.empty()){
             std::cout << "Read file success: " << filename << std::endl;
             std::cout << "Content: " << content << std::endl;

@@ -25,7 +25,7 @@ std::mutex ready_list_mutex;
 int pidSum;//当前进程总数
 int Timer;
 
-FileSystem fs(100,1024);
+
 bool CPUbusy;
 bool KeyBoardBusy;
 bool printBusy;
