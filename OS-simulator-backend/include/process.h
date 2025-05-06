@@ -1,6 +1,6 @@
 #pragma once
 
-
+#include "headfile.h"
 #include<stdio.h>
 #include<stdlib.h>
 #include<string>
@@ -14,6 +14,7 @@
 #include<map>
 #include<time.h>
 #include<sstream>
+#include<atomic>
 using namespace std;
 
 //进程状态
@@ -41,7 +42,8 @@ using namespace std;
 #define KEYBOARD_SWITCH_OVER 8//输入结束
 #define PRINT_SWITCH_OVER 9//输出结束
 #define FILE_SWITCH_OVER 10//文件写结束
-
+//ADD
+#define MAX_APPLY_TIME 10 //最大申请时间
 
 extern std::mutex ready_list_mutex;
 
@@ -78,7 +80,7 @@ typedef struct process_struct {
 	//ADD，新的指令存储队列和函数
 	std::atomic<int> current_instruction_time;
     std::queue<std::string> instructions;
-    
+    int apply_time;//设备申请次数
     bool has_instruction() const {
         return !instructions.empty();
     }
