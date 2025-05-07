@@ -3,11 +3,26 @@
 #include <iomanip>
 #include <algorithm>
 
-FileSystem fs(1024, 4);
+//256
+FileSystem fs(256, 4096);
+
 
 FileSystem::FileSystem(int totalBlocks, int blockSize)
     : totalBlocks(totalBlocks), blockSize(blockSize) {
     rootDir = new Directory{ "/", {}, nullptr };
+    // 创建根目录的 FCB
+    FCB* rootFcb = new FCB{
+        "/",
+        DIRECTORY_TYPE,         // 目录类型
+        0,                      // 大小为0
+        FULL,                   // 不占用磁盘空间
+        time(nullptr),          // 创建时间
+        time(nullptr),          // 最后修改时间
+        "rwx"                   // 默认权限
+    };
+
+// 注册根目录到 fileTable
+fileTable["/"] = rootFcb;
     diskUsage.resize(totalBlocks, false);
     memset(disk, 0, DISK_SIZE);
 }
@@ -96,6 +111,13 @@ int FileSystem::createFile(string path, string filename, int fileType, int size)
         return -1;
     }
 
+    // 调试输出：当前目录内容
+    cout << "\n[DEBUG] 当前目录内容: ";
+    for (const auto& e : dir->entries) {
+        cout << e.name << " ";
+    }
+    cout << endl;
+
     // 检查文件名冲突
     for (const auto& entry : dir->entries) {
         if (entry.name == filename) {
@@ -104,10 +126,13 @@ int FileSystem::createFile(string path, string filename, int fileType, int size)
         }
     }
 
-    // 使用内存管理模块分配虚拟内存
-    v_address v_addr;
-    if (alloc_for_file(size, &v_addr) != 0) {
-        cerr << "虚拟内存分配失败！\n";
+    // 分配磁盘空间
+    p_address addr = allocateDiskSpace(size);
+    cout << "[DEBUG] allocateDiskSpace返回: " << addr << endl;
+
+    if (addr == FULL) {
+        cerr << "磁盘空间不足！总块数：" << totalBlocks
+            << " 请求块数：" << (size + blockSize - 1) / blockSize << endl;
         return -1;
     }
 
@@ -116,7 +141,7 @@ int FileSystem::createFile(string path, string filename, int fileType, int size)
         filename,
         fileType,
         size,
-        v_addr,  // 存储虚拟地址
+        addr,
         time(nullptr),
         time(nullptr),
         "rw-"  // 默认文件权限
@@ -128,8 +153,9 @@ int FileSystem::createFile(string path, string filename, int fileType, int size)
     fileTable[fullpath] = fcb;
 
     cout << "创建文件成功 " << fullpath
-        << " (大小: " << size << " bytes, 虚拟地址: "
-        << v_addr << ")\n";
+        << " (大小: " << size << " bytes, 块: "
+        << addr << "-" << (addr + (size + blockSize - 1) / blockSize - 1)
+        << ")\n";
     return 0;
 }
 
@@ -160,33 +186,6 @@ int FileSystem::deleteFile(string path, string filename) {
     return 0;
 }
 
-string FileSystem::readFile(string path, string filename) {
-    string fullpath = (path == "/") ? path + filename : path + "/" + filename;
-    auto it = fileTable.find(fullpath);
-    if (it == fileTable.end()) {
-        cerr << "File not found: " << fullpath << endl;
-        return "";
-    }
-
-    FCB* fcb = it->second;
-    string content;
-    content.resize(fcb->size);
-    
-    // 使用内存管理模块读取数据
-    for (size_t i = 0; i < fcb->size; ++i) {
-        atom_data data;
-        v_address addr = fcb->diskAddress + i;  // 直接使用虚拟地址
-        if (read_memory(&data, addr, FULL) != 0) {
-            cerr << "Failed to read memory for file: " << fullpath << endl;
-            return "";
-        }
-        content[i] = static_cast<char>(data);
-    }
-    
-    cout << "[DEBUG] Read " << fcb->size << " bytes from file " << fullpath << endl;
-    return content;
-}
-
 int FileSystem::writeFile(string path, string filename, string data) {
     string fullpath = (path == "/") ? path + filename : path + "/" + filename;
     auto it = fileTable.find(fullpath);
@@ -201,18 +200,30 @@ int FileSystem::writeFile(string path, string filename, string data) {
         return -1;
     }
 
-    // 逐字节写入数据
-    for (size_t i = 0; i < data.size(); ++i) {
-        v_address addr = fcb->diskAddress + i;  // 直接使用虚拟地址
-        if (write_memory(static_cast<atom_data>(data[i]), addr, FULL) != 0) {
-            cerr << "Failed to write memory for file: " << fullpath << endl;
-            return -1;
-        }
-    }
-    
+    // 确保写入的数据大小与文件大小一致，不足部分填充0
+    string paddedData = data;
+    paddedData.resize(fcb->size, '\0');
+    memcpy(&disk[fcb->diskAddress * blockSize], paddedData.data(), fcb->size);
     fcb->lastModifiedTime = time(nullptr);
-    cout << "[DEBUG] Writing data to memory at address: " << fcb->diskAddress << " Size: " << fcb->size << endl;
+    cout << "[DEBUG] Writing data to disk at address: " << fcb->diskAddress * blockSize 
+         << " Size: " << fcb->size << endl;
     return 0;
+}
+
+string FileSystem::readFile(string path, string filename) {
+    string fullpath = (path == "/") ? path + filename : path + "/" + filename;
+    auto it = fileTable.find(fullpath);
+    if (it == fileTable.end()) {
+        cerr << "File not found: " << fullpath << endl;
+        return "";
+    }
+
+    FCB* fcb = it->second;
+    string content;
+    content.resize(fcb->size);
+    memcpy(&content[0], &disk[fcb->diskAddress * blockSize], fcb->size);
+    cout << "[DEBUG] Read " << fcb->size << " bytes from file " << fullpath << endl;
+    return content;
 }
 
 void FileSystem::printFreeSpaceList() {
@@ -458,10 +469,110 @@ void FileSystem::printDirectory(const string& path) {
 }
 
 //辅助函数
-string FileSystem::format_time(time_t rawtime) {
+string FileSystem::format_time(time_t rawtime) const {
     struct tm* timeinfo = localtime(&rawtime);
     char buffer[80];
     strftime(buffer, 80, "%Y-%m-%d %H:%M:%S", timeinfo);
     return string(buffer);
 }
 
+const vector<bool>& FileSystem::getDiskUsage() const {
+    return diskUsage;
+}
+
+void fillFilesystemOverview(FilesystemOverview& overview, const FileSystem& fs) {
+    overview.total_capacity = fs.getTotalBlocks() * fs.getBlockSize();
+    overview.block_size = fs.getBlockSize();
+    overview.total_blocks = fs.getTotalBlocks();
+
+    int usedBlocks = 0;
+    const auto& diskUsage = fs.getDiskUsage(); // 使用公开接口获取
+    for (int i = 0; i < fs.getTotalBlocks(); ++i) {
+        if (diskUsage[i]) ++usedBlocks; // 安全访问
+    }
+
+    overview.used_space = usedBlocks * fs.getBlockSize();
+    overview.free_space = (fs.getTotalBlocks() - usedBlocks) * fs.getBlockSize();
+}
+
+DirectoryEntryForUI buildDirectoryTree(const Directory* dir, const std::string& currentPath) {
+    DirectoryEntryForUI entry;
+    entry.name = dir->name;
+    entry.type = "目录";
+    entry.path = currentPath.empty() ? "/" : currentPath + "/" + dir->name;
+
+    for (const auto& e : dir->entries) {
+        if (e.fcb->fileType == DIRECTORY_TYPE) {
+            Directory* subDir = reinterpret_cast<Directory*>(e.fcb->diskAddress);
+            entry.children.push_back(buildDirectoryTree(subDir, entry.path));
+        } else {
+            DirectoryEntryForUI fileEntry;
+            fileEntry.name = e.name;
+            fileEntry.type = "文件";
+            fileEntry.path = entry.path + "/" + e.name;
+            entry.children.push_back(fileEntry);
+        }
+    }
+
+    return entry;
+}
+
+const Directory* FileSystem::getRootDirectory() const {
+    return rootDir;
+}
+
+void fillFilesystemStructure(FilesystemStructureForUI& structure, const FileSystem& fs) {
+    structure.root = buildDirectoryTree(fs.getRootDirectory(), "");
+}
+
+
+void fillFilesystemFileInfoTable(FilesystemFileInfoTableForUI& table, const FileSystem& fs) {
+    std::function<void(const Directory*, const std::string&)> traverse =
+        [&](const Directory* dir, const std::string& path) {
+            for (const auto& entry : dir->entries) {
+                std::string fullPath = path + (path == "/" ? "" : "/") + entry.name;
+                FileInfoItemForUI item;
+                item.filename = entry.name;
+                item.fileType = (entry.fcb->fileType == FILE_TYPE) ? "普通文件" : "目录";
+
+                // 文件大小
+                if (entry.fcb->fileType == FILE_TYPE) {
+                    item.size = std::to_string(entry.fcb->size) + " bytes";
+                } else {
+                    item.size = "-";
+                }
+
+                // 时间格式化
+                item.creationTime = fs.format_time(entry.fcb->creationTime);
+                item.lastModifiedTime = fs.format_time(entry.fcb->lastModifiedTime);
+
+                item.permissions = entry.fcb->permissions;
+
+                table.files.push_back(item);
+
+                if (entry.fcb->fileType == DIRECTORY_TYPE) {
+                    const Directory* subDir = reinterpret_cast<const Directory*>(entry.fcb->diskAddress);
+                    traverse(subDir, fullPath); // 递归遍历子目录
+                }
+            }
+        };
+
+    traverse(fs.getRootDirectory(), "/");
+}
+
+void fillFilesystemStatus(FilesystemStatusForUI& status, const FileSystem& fs) {
+    fillFilesystemOverview(status.overview, fs);
+    fillFilesystemStructure(status.structure, fs);
+    fillFilesystemFileInfoTable(status.fileInfo, fs);
+}
+
+
+void sendFilesystemStatusToUI(const FileSystem& fs) {
+    FilesystemStatusForUI status;
+    fillFilesystemStatus(status, fs);
+
+    std::string jsonStr;
+    //JsonHelper::ObjectToJson(status, jsonStr);  // 假设 JsonHelper 是基于 rapidjson 的封装
+
+    std::cout << "[UI] Generated JSON:\n" << jsonStr << std::endl;
+}
