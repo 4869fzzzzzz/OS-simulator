@@ -11,9 +11,8 @@
 #include "../include/interrupt.h"
 #include <sstream>
 
-using namespace aigc;
 using namespace std;
-
+using namespace aigc;
 
 // ---------------- 全局变量定义 ----------------
 // 全局计数器模拟页面置换次数
@@ -538,6 +537,7 @@ void sendMemoryStatusToUI() {
     std::cout << "Generated JSON:\n" << jsonStr << std::endl;
 }
 
+
 void test_memory1() {
     std::cout << "=== Testing Memory Management ===" << std::endl;
     init_memory();
@@ -673,7 +673,7 @@ void test_memory1() {
 
     // 测试7：内存状态报告
     std::cout << "\n[Test 7] Memory status report:" << std::endl;
-    sendMemoryStatusToUI();
+    //sendMemoryStatusToUI();
 
     // 清理
     free_process_memory(pid2);
@@ -802,9 +802,9 @@ void test_memory_swap() {
     // 清理
     free_process_memory(pid);
 }
-void test_filesystem() {
+void test_filesystem1() {
     std::cout << "\n=== Testing File System ===" << std::endl;
-    FileSystem fs(1024, 4096);
+    FileSystem fs(256, 4096);
 
     // 测试1：基础读写测试
     std::cout << "\n[Test 1] Basic read/write:" << std::endl;
@@ -846,7 +846,7 @@ void test_filesystem() {
 
     // 测试4：大文件测试
     std::cout << "\n[Test 4] Large file test:" << std::endl;
-    const int LARGE_SIZE = 16 * 4096;  // 16个块
+    const int LARGE_SIZE = 8 * 4096;  // 8个块
     fs.createFile("/", "large.bin", FILE_TYPE, LARGE_SIZE);
     
     string largeData(LARGE_SIZE, 'D');
@@ -872,7 +872,9 @@ void test_directory_operations() {
 
     // 创建目录
     fs.createDirectory("/", "documents");
-    fs.printDirectory("/documents"); // 应显示空目录
+    fs.createDirectory("/", "121");
+    fs.createDirectory("/121", "d");
+    fs.printDirectory("/"); // 应显示空目录
 
     // 创建文件（仅一次）
     int createResult = fs.createFile("/documents", "notes.txt", FILE_TYPE, 1024);
@@ -909,51 +911,63 @@ void test_directory_operations() {
     
     //删除子目录
     fs.deleteDirectoryRecursive("/documents/projects");
-    fs.printDirectory("/documents");
-    
-    // 最终验证
-    fs.printDirectory("/");
+    // 最终验证前尝试删除所有子项
+    std::cout << "\n[Cleanup] 清理根目录下的所有子目录..." << std::endl;
+    std::vector<std::string> rootEntries = fs.listDirectory("/");
+    for (const auto& entry : rootEntries) {
+        if (entry.back() == '/') { // 如果是目录
+            std::string dirName = entry.substr(0, entry.size() - 1); // 去掉末尾 '/'
+            fs.deleteDirectoryRecursive("/" + dirName);
+        } else {
+            fs.deleteFile("/", entry);
+        }
+    }
+
+    // 再次打印根目录确认为空
+    std::cout << "\n[INFO] 删除完成后根目录内容:" << std::endl;
+    fs.printDirectory("/"); 
 }
 
+void test_filesystem2() {
+    std::cout << "\n=== Testing File System ===" << std::endl;
+
+    std::cout << "[INFO] DISK_SIZE = " << DISK_SIZE << " bytes\n";
+    std::cout << "[INFO] sizeof(disk) = " << sizeof(disk) << " bytes\n";
+
+    FileSystem fs(256, 4096);
+
+    std::cout << "[INFO] Created file system with "
+              << fs.getTotalBlocks() << " blocks of "
+              << fs.getBlockSize() << " bytes each.\n";
+
+    // 测试1：基础读写测试
+    std::cout << "\n[Test 1] Basic read/write:" << std::endl;
+    int createResult = fs.createFile("/", "data.bin", FILE_TYPE, 1024);
+    std::cout << "createFile 返回码: " << createResult << std::endl;
+    if (createResult != 0) {
+        std::cerr << "文件创建失败，错误码: " << createResult << std::endl;
+        return;
+    }
+
+    string testData(1024, 'A');
+    std::cout << "writeFile(\"/\", \"data.bin\") ... ";
+    int writeResult = fs.writeFile("/", "data.bin", testData);
+    std::cout << (writeResult == 0 ? "Success\n" : "Failed\n");
+
+    string content = fs.readFile("/", "data.bin");
+    std::cout << "Read data.bin: " << content.substr(0, 50) << "..." << std::endl;
+}
 /*int main() {
     SetConsoleOutputCP(CP_UTF8);  // 设置控制台输出为 UTF-8 编码
-    test_memory1();
+    //test_memory1();
     //test_memory2();
     //test_address_translation();
     //test_memory_swap();
-    //test_filesystem();
-    //test_directory_operations();
+    //test_filesystem1();
+    //test_filesystem2();
+    test_directory_operations();
     
     return 0;
 }*/
 
 /*int main() {
-    // 初始化内存管理器
-    init_memory();
-
-    // 分配一些内存模拟运行中的进程
-    m_pid pid1 = 1001;
-    v_address addr1 = alloc_for_process(pid1, 4096);  // 分配一页内存
-    if (addr1 == FULL) {
-        std::cerr << "Failed to allocate memory for process 1" << std::endl;
-    } else {
-        std::cout << "Allocated memory at virtual address: 0x" << std::hex << addr1 << std::dec << std::endl;
-    }
-
-    m_pid pid2 = 1002;
-    v_address addr2 = alloc_for_process(pid2, 8192);  // 分配两页内存
-    if (addr2 == FULL) {
-        std::cerr << "Failed to allocate memory for process 2" << std::endl;
-    } else {
-        std::cout << "Allocated memory at virtual address: 0x" << std::hex << addr2 << std::dec << std::endl;
-    }
-
-    // 填充并输出内存状态
-    sendMemoryStatusToUI();
-
-    // 清理分配的内存
-    free_process_memory(pid1);
-    free_process_memory(pid2);
-
-    return 0;
-}*/
