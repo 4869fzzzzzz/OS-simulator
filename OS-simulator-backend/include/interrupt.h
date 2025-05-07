@@ -118,9 +118,11 @@ struct CPU {
 };
 
 bool RUN(std::string cmd);//运行一条指令
-void CmdSplit(std::string& cmd,std::vector<std::string>& scmd);//划分指令
+void CmdSplit(const std::string& cmd,std::vector<std::string>& scmd);//划分指令
 bool handleClientCmd(std::string cmd, std::string& result);
 void cpu_worker(CPU& cpu);
+
+void incrementInterruptCount(InterruptType type);
 //UI数据交换
 class TimerData{
 public:
@@ -128,4 +130,91 @@ public:
     std::string nowSysTime;
     long long time_cnt;
     AIGC_JSON_HELPER(startSysTime,nowSysTime,time_cnt)
+};
+// 中断向量表项数据结构
+class InterruptVectorItem {
+    public:
+        std::string type;          // 中断类型名称
+        bool enabled;              // 中断是否启用
+        int priority;             // 中断优先级
+        std::string handler_name;  // 处理函数名称
+        int trigger_count;        // 触发次数
+        AIGC_JSON_HELPER(type, enabled, priority, handler_name, trigger_count)
+};
+    
+    // 中断队列项数据结构
+class InterruptQueueItem {
+    public:
+        int index;               // 序号
+        std::string type;        // 中断类型
+        std::string device;      // 设备类型
+        long long raise_time;    // 中断产生时间
+        AIGC_JSON_HELPER(index, type, device, raise_time)
+};
+    
+    // 中断系统数据交换类
+class InterruptSystemData {
+    public:
+        // 总览信息
+        struct Overview {
+            bool timer_enabled;          // 时钟是否开启
+            int timer_interval;          // 时钟中断间隔
+            std::string current_time;    // 当前时钟时间
+            int total_interrupts;        // 产生中断总数
+            AIGC_JSON_HELPER(timer_enabled, timer_interval, current_time, total_interrupts)
+        } overview;
+    
+        // 中断向量表
+        std::vector<InterruptVectorItem> vector_table;
+        
+        // 中断处理队列
+        std::vector<InterruptQueueItem> interrupt_queue;
+    
+        AIGC_JSON_HELPER(overview, vector_table, interrupt_queue)
+    
+        // 更新数据方法
+        void update() {
+            // 更新总览信息
+            overview.timer_enabled = timerInterruptValid.load();
+            overview.timer_interval = Normal_Timer_Interval;
+            overview.current_time = timeToChar(get_nowSysTime());
+            overview.total_interrupts = calculateTotalInterrupts();
+    
+            // 更新中断向量表
+            vector_table.clear();
+            for (int i = 0; i < InterruptVectorTableSize; i++) {
+                if (InterruptVectorTable[i].handler != nullptr) {
+                    InterruptVectorItem item;
+                    item.type = getInterruptTypeName(static_cast<InterruptType>(i));
+                    item.enabled = (valid.load() & (1 << i));
+                    item.priority = InterruptVectorTable[i].priority;
+                    item.handler_name = getHandlerName(InterruptVectorTable[i].handler);
+                    item.trigger_count = getTriggerCount(static_cast<InterruptType>(i));
+                    vector_table.push_back(item);
+                }
+            }
+    
+            // 更新中断队列
+            interrupt_queue.clear();
+            int index = 0;
+            std::lock_guard<std::mutex> lock(iq);
+            auto tempQueue = InterruptQueue;
+            while (!tempQueue.empty()) {
+                auto interrupt = tempQueue.top();
+                InterruptQueueItem item;
+                item.index = index++;
+                item.type = getInterruptTypeName(interrupt.type);
+                item.device = getDeviceType(interrupt.value1);
+                item.raise_time = interrupt.timecount;
+                interrupt_queue.push_back(item);
+                tempQueue.pop();
+            }
+        }
+    
+    private:
+        static std::string getInterruptTypeName(InterruptType type);
+        static std::string getHandlerName(InterruptFunc handler);
+        static std::string getDeviceType(int device_id);
+        static int calculateTotalInterrupts();
+        static int getTriggerCount(InterruptType type);
 };

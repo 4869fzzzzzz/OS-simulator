@@ -64,6 +64,7 @@ void errorHandle(int v1,int v2,std::string v3,int* v4, int v5){
 }
 //中断产生
 void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int v5){
+    incrementInterruptCount(t);
     Interrupt itp(t, v1, v2, v3, v4, v5);
     if(handleFlag.load()){
         readyInterruptQueue.push(itp);
@@ -104,24 +105,45 @@ void handleInterrupt(){
     handleFlag.store(0);
 }
 //工具函数
-bool InterruptTool::isValid(InterruptType t){
-    return valid.load() & 1<<static_cast<int>(t);
+bool InterruptTool::isValid(InterruptType t) {
+    // 只能查询可屏蔽中断的状态
+    if (static_cast<int>(t) >= static_cast<int>(InterruptType::NON_MASKABLE)) {
+        return true;  // 不可屏蔽中断始终有效
+    }
+    return valid.load() & (1 << static_cast<int>(t));
 }
-bool InterruptTool::setValid(InterruptType t)
-{
-    valid.store(valid.load()|1<<static_cast<int>(t));
+
+bool InterruptTool::setValid(InterruptType t) {
+    // 只能设置可屏蔽中断
+    if (static_cast<int>(t) >= static_cast<int>(InterruptType::NON_MASKABLE)) {
+        return false;  // 不允许修改不可屏蔽中断
+    }
+    valid.store(valid.load() | (1 << static_cast<int>(t)));
     return true;
 }
-bool InterruptTool::unsetValid(InterruptType t){
-    valid.store(valid.load()&~(1<<static_cast<int>(t)));
+
+bool InterruptTool::unsetValid(InterruptType t) {
+    // 只能设置可屏蔽中断
+    if (static_cast<int>(t) >= static_cast<int>(InterruptType::NON_MASKABLE)) {
+        return false;  // 不允许修改不可屏蔽中断
+    }
+    valid.store(valid.load() & ~(1 << static_cast<int>(t)));
     return true;
 }
-bool InterruptTool::allValid(){
-    valid.store(0xffff);
+
+bool InterruptTool::allValid() {
+    // 只设置可屏蔽中断的有效位
+    uint16_t maskable_interrupts = (1 << static_cast<int>(InterruptType::NON_MASKABLE)) - 1;
+    valid.store((valid.load() & ~maskable_interrupts) | maskable_interrupts);
     return true;
 }
-bool InterruptTool::setPriority(InterruptType t, int mpriority){
-    InterruptVectorTable[static_cast<int>(t)].priority=mpriority;
+
+bool InterruptTool::setPriority(InterruptType t, int mpriority) {
+    // 只能设置可屏蔽中断的优先级
+    if (static_cast<int>(t) >= static_cast<int>(InterruptType::NON_MASKABLE)) {
+        return false;  // 不允许修改不可屏蔽中断的优先级
+    }
+    InterruptVectorTable[static_cast<int>(t)].priority = mpriority;
     return true;
 }
 bool InterruptTool::enableTimerInterrupt(){
@@ -530,8 +552,85 @@ void cpu_worker(CPU& cpu) {
         if (!InterruptQueue.empty()) {
             handleInterrupt();
         }
-        
-        
-        
     }
 };
+
+
+//数据处理部分
+
+// 中断类型名称转换
+std::string InterruptSystemData::getInterruptTypeName(InterruptType type) {
+    switch(type) {
+        case InterruptType::TIMER: 
+            return "TIMER";
+        case InterruptType::DEVICE: 
+            return "DEVICE";
+        case InterruptType::SOFTWARE: 
+            return "SOFTWARE";
+        case InterruptType::SNAPSHOT: 
+            return "SNAPSHOT";
+        case InterruptType::NON_MASKABLE: 
+            return "NON_MASKABLE";
+        case InterruptType::PAGEFAULT: 
+            return "PAGEFAULT";
+        case InterruptType::TEST: 
+            return "TEST";
+        case InterruptType::MERROR: 
+            return "ERROR";
+        default: 
+            return "UNKNOWN";
+    }
+}
+
+// 处理函数名称转换
+std::string InterruptSystemData::getHandlerName(InterruptFunc handler) {
+    if(handler == nullptr) 
+        return "NULL";
+    if(handler == noHandle) 
+        return "noHandle";
+    if(handler == errorHandle) 
+        return "errorHandle";
+    if(handler == Pagefault) 
+        return "PageFaultHandler";
+    if(handler == snapshotSend) 
+        return "SnapshotHandler";
+    return "UnknownHandler";
+}
+
+// 设备类型转换
+std::string InterruptSystemData::getDeviceType(int device_id) {
+    // 根据设备ID返回对应的设备类型字符串
+    switch(device_id) {
+        case 0: 
+            return "KEYBOARD";
+        case 1: 
+            return "MOUSE";
+        case 2: 
+            return "PRINTER";
+        case 3: 
+            return "DISK";
+        default: 
+            return "UNKNOWN_DEVICE";
+    }
+}
+
+// 计算总中断数
+int InterruptSystemData::calculateTotalInterrupts() {
+    static std::atomic<int> total_interrupts{0};
+    return total_interrupts.load();
+}
+
+// 获取特定类型中断的触发次数
+int InterruptSystemData::getTriggerCount(InterruptType type) {
+    static std::map<InterruptType, std::atomic<int>> trigger_counts;
+    return trigger_counts[type].load();
+}
+
+// 添加计数函数 - 在 raiseInterrupt 函数中调用
+void incrementInterruptCount(InterruptType type) {
+    static std::map<InterruptType, std::atomic<int>> trigger_counts;
+    static std::atomic<int> total_interrupts{0};
+    
+    trigger_counts[type]++;
+    total_interrupts++;
+}

@@ -79,6 +79,30 @@ public:
     void printDirectory(const string& path);
     void printFreeSpaceList(); // 打印空闲空间信息
     void printUtilizationRate(); // 打印外存使用率
+
+    std::vector<std::string> getAllFilePaths(const std::string& directoryPath) {
+        std::vector<std::string> filePaths;
+        
+        // 首先找到对应的目录
+        Directory* dir = findDirectory(directoryPath);
+        if (!dir) {
+            return filePaths; // 目录不存在则返回空vector
+        }
+        
+        // 遍历目录中的所有条目
+        for (const DirEntry& entry : dir->entries) {
+            if (entry.fcb->fileType == FILE_TYPE) {
+                // 构建完整路径
+                std::string fullPath = directoryPath;
+                if (fullPath.back() != '/') fullPath += '/';
+                fullPath += entry.name;
+                
+                filePaths.push_back(fullPath);
+            }
+        }
+        
+        return filePaths;
+    }
 };
 
-FileSystem fs(1024,4);
+extern FileSystem fs;

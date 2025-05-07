@@ -1,20 +1,6 @@
 #pragma once
 
 #include "headfile.h"
-#include<stdio.h>
-#include<stdlib.h>
-#include<string>
-#include<math.h>
-#include<algorithm>
-#include<iostream>
-#include<fstream>
-#include<vector>
-#include<queue>
-#include<list>
-#include<map>
-#include<time.h>
-#include<sstream>
-#include<atomic>
 using namespace std;
 
 //进程状态
@@ -49,52 +35,106 @@ extern std::mutex ready_list_mutex;
 
 
 typedef struct process_struct {
-	unsigned short uid;//用户标识
-	int pid;//进程标识
-	int state;//标识进程的状态
-	int cpuState;//定义进程所处的特权状态
-	int prority;//进程优先级
+    // 基本属性
+    unsigned short uid;
+    int pid;
+    int state;
+    int cpuState;
+    int prority;
 
-	int alltime;//进程需要CPU总时间
-	int cputime;//进程占用CPU的时间
-	int cpuStartTime;//进程开始占用CPU的时间
-	int keyboardStartTime;//进程开始占用键盘输入的时间
-	int printStartTime;//进程开始占用输出的时间
-	int filewriteStartTime;//进程开始占用文件写入的时间
-	int createtime;//进程创建时间 到达时间
-	double RR;//进程的响应比 （等待时间+服务时间）/服务时间
+    // 时间相关 - 将需要原子操作的变量改为 atomic
+    int alltime;
+    int cputime;
+    std::atomic<int> cpuStartTime;
+    std::atomic<int> keyboardStartTime;
+    std::atomic<int> printStartTime;
+    std::atomic<int> filewriteStartTime;
+    int createtime;
+    double RR;
 
-	int task_size;//占用内存块数
-	bool is_apply;//是否分配了内存
-	int address;//保存分配的内存虚拟地址
+    // 内存相关
+    int task_size;
+    bool is_apply;
+    int address;
+    int blocktype;
 
-	int blocktype;//进程阻塞的类型
+    // 文件相关
+    std::string fs;
+    std::string fsState;
+    std::string content;
 
-	string fs;//正在访问的文件信息
-	string fsState;//访问文件的方式
-	string content;//写入文件的内容
-
-
-	list<string> program;//程序段顺序执行命令
-
-	//ADD，新的指令存储队列和函数
-	std::atomic<int> current_instruction_time;
+    // 程序相关
+    std::list<std::string> program;
+    std::atomic<int> current_instruction_time;
     std::queue<std::string> instructions;
-    int apply_time;//设备申请次数
+    std::atomic<int> apply_time;
+
+    // 默认构造函数
+    process_struct() : 
+        uid(0), pid(-1), state(CREATING), cpuState(0), prority(0),
+        alltime(0), cputime(0), 
+        cpuStartTime(0), keyboardStartTime(0), printStartTime(0), filewriteStartTime(0),
+        createtime(0), RR(0.0),
+        task_size(0), is_apply(false), address(0), blocktype(NOTBLOCK),
+        current_instruction_time(0), apply_time(0) {}
+
+    // 复制构造函数
+    process_struct(const process_struct& other) : 
+        uid(other.uid), pid(other.pid), state(other.state),
+        cpuState(other.cpuState), prority(other.prority),
+        alltime(other.alltime), cputime(other.cputime),
+        cpuStartTime(other.cpuStartTime.load()),
+        keyboardStartTime(other.keyboardStartTime.load()),
+        printStartTime(other.printStartTime.load()),
+        filewriteStartTime(other.filewriteStartTime.load()),
+        createtime(other.createtime), RR(other.RR),
+        task_size(other.task_size), is_apply(other.is_apply),
+        address(other.address), blocktype(other.blocktype),
+        fs(other.fs), fsState(other.fsState), content(other.content),
+        program(other.program),
+        current_instruction_time(other.current_instruction_time.load()),
+        instructions(other.instructions),
+        apply_time(other.apply_time.load()) {}
+
+    // 移动构造函数
+    process_struct(process_struct&& other) noexcept : 
+        uid(std::exchange(other.uid, 0)),
+        pid(std::exchange(other.pid, -1)),
+        state(std::exchange(other.state, CREATING)),
+        cpuState(std::exchange(other.cpuState, 0)),
+        prority(std::exchange(other.prority, 0)),
+        alltime(std::exchange(other.alltime, 0)),
+        cputime(std::exchange(other.cputime, 0)),
+        cpuStartTime(other.cpuStartTime.load()),
+        keyboardStartTime(other.keyboardStartTime.load()),
+        printStartTime(other.printStartTime.load()),
+        filewriteStartTime(other.filewriteStartTime.load()),
+        createtime(std::exchange(other.createtime, 0)),
+        RR(std::exchange(other.RR, 0.0)),
+        task_size(std::exchange(other.task_size, 0)),
+        is_apply(std::exchange(other.is_apply, false)),
+        address(std::exchange(other.address, 0)),
+        blocktype(std::exchange(other.blocktype, NOTBLOCK)),
+        fs(std::move(other.fs)),
+        fsState(std::move(other.fsState)),
+        content(std::move(other.content)),
+        program(std::move(other.program)),
+        current_instruction_time(other.current_instruction_time.load()),
+        instructions(std::move(other.instructions)),
+        apply_time(other.apply_time.load()) {}
+
+    // 工具函数
     bool has_instruction() const {
         return !instructions.empty();
     }
     
     std::string get_current_instruction() {
         if (!instructions.empty()) {
-            std::string instr = instructions.front();
-            
-            return instr;
+            return instructions.front();
         }
         return "";
     }
-}PCB;
-
+} PCB;
 typedef struct mutexInfo {
 	bool isBusy;
 	list<PCB> waitForFileList;//等待文件队列
