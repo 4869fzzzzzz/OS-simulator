@@ -1,6 +1,7 @@
 #pragma once
 #include "./headfile.h"
 #include "./memory.h"
+#include <functional>
 
 using namespace std;
 
@@ -52,10 +53,15 @@ private:
     // 释放磁盘空间
     void freeDiskSpace(p_address address, int size);
     Directory* findDirectory(const string& path);
-    std::string format_time(time_t rawtime);
 public:
     FileSystem(int totalBlocks, int blockSize); // 构造函数
     ~FileSystem();
+    int getTotalBlocks() const { return totalBlocks; }
+    int getBlockSize() const { return blockSize; }
+
+    const vector<bool>& getDiskUsage() const;
+    const Directory* getRootDirectory() const;
+    string format_time(time_t rawtime) const;
 
     // 文件管理功能
     int createFile(string path, string filename, int fileType, int size); // 创建文件
@@ -106,3 +112,71 @@ public:
 };
 
 extern FileSystem fs;
+
+//总容量、已用空间、可用空间、总块数、块大小
+class FilesystemOverview {
+public:
+    size_t total_capacity;      // 总容量（字节）
+    size_t used_space;          // 已使用空间（字节）
+    size_t free_space;          // 可用空间（字节）
+    int total_blocks;           // 总块数
+    int block_size;             // 块大小（字节）
+
+    AIGC_JSON_HELPER(total_capacity, used_space, free_space, total_blocks, block_size)
+};
+
+void fillFilesystemOverview(FilesystemOverview& overview, const FileSystem& fs);
+
+class DirectoryEntryForUI {
+public:
+    std::string name;            // 名称
+    std::string type;            // 类型："目录" 或 "文件"
+    std::string path;            // 路径
+    std::vector<DirectoryEntryForUI> children;  // 子项
+
+    AIGC_JSON_HELPER(name, type, path, children)
+};
+
+class FilesystemStructureForUI {
+public:
+    DirectoryEntryForUI root;
+
+    AIGC_JSON_HELPER(root)
+};
+
+DirectoryEntryForUI buildDirectoryTree(const Directory* dir, const std::string& currentPath);
+void fillFilesystemStructure(FilesystemStructureForUI& structure, const FileSystem& fs);
+
+//文件名-类型-大小-创建时间-修改时间-权限
+class FileInfoItemForUI {
+public:
+    std::string filename;         // 文件名
+    std::string fileType;         // 类型："普通文件"/"目录"
+    std::string size;             // 大小（带单位）
+    std::string creationTime;     // 创建时间
+    std::string lastModifiedTime; // 最后修改时间
+    std::string permissions;      // 权限字符串（如 rwx）
+
+    AIGC_JSON_HELPER(filename, fileType, size, creationTime, lastModifiedTime, permissions)
+};
+
+class FilesystemFileInfoTableForUI {
+public:
+    std::vector<FileInfoItemForUI> files;
+
+    AIGC_JSON_HELPER(files)
+};
+
+void fillFilesystemFileInfoTable(FilesystemFileInfoTableForUI& table, const FileSystem& fs);
+
+class FilesystemStatusForUI {
+public:
+    FilesystemOverview overview;
+    FilesystemStructureForUI structure;
+    FilesystemFileInfoTableForUI fileInfo;
+
+    AIGC_JSON_HELPER(overview, structure, fileInfo)
+};
+
+void fillFilesystemStatus(FilesystemStatusForUI& status, const FileSystem& fs);
+
