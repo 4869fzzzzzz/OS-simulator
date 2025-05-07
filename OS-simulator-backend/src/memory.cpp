@@ -9,11 +9,15 @@
 #include <string>
 #include <iomanip>
 #include "../include/interrupt.h"
+#include <sstream>
 
+using namespace aigc;
 using namespace std;
 
-// ---------------- 全局变量定义 ----------------
 
+// ---------------- 全局变量定义 ----------------
+// 全局计数器模拟页面置换次数
+size_t g_page_replacement_count = 0;
 // 页表数组
 PageTableItem page_table[PAGE_TABLE_SIZE];
 // 虚拟页使用情况位图
@@ -110,6 +114,7 @@ void free_process_memory(m_pid pid) {
 
 // 将虚拟页调入内存
 int page_in(v_address v_addr, m_pid pid) {
+    g_page_replacement_count++;
     page v_page_num = v_addr / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
 
@@ -140,6 +145,7 @@ int page_in(v_address v_addr, m_pid pid) {
 
 page clock_replace() {
     Frame* current = clock_hand;
+
     while (true) {
         if (!current->used) {
             // 找到一个未被使用的帧，进行置换
@@ -328,7 +334,6 @@ int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
     
     // 如果页面不在内存中，返回缺页错误
     if (!pt.in_memory) {
-        raiseInterrupt(InterruptType::PAGEFAULT,pid, v_addr, "Page not in memory", nullptr, 0);
         return -2; // 特别标识缺页错误
     }
     // 计算物理地址
@@ -342,7 +347,7 @@ int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
     
     return 0;
     }
-void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
+/*void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
         // 处理缺页中断的逻辑
         std::cout << "[PAGEFAULT] Process " << pid << " triggered a page fault at virtual address: " << v_addr << std::endl;
         std::cout << "Info: " << info << std::endl;
@@ -357,16 +362,31 @@ void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
         if (page_in(v_addr, pid) != 0) {
             std::cerr << "[ERROR] Failed to handle page fault for process " << pid << std::endl;
         }
-    }
+    }*/
 
-//0 成功读取一行指令;-1 缺页异常;-2 结尾
+//0 成功读取一行指令;-1 缺页异常;-2 缺页异常
 int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr, m_pid pid, size_t* bytes_read) {
         p_address p_addr;
         int result = translate_address(v_addr, pid, &p_addr);
     
         if (result == -2) { // 缺页情况
-            raiseInterrupt(InterruptType::PAGEFAULT,pid, v_addr, "Page fault during instruction read", nullptr, 0);
-            return -1;
+            std::cout << "[INFO] Page fault at address 0x" << std::hex << v_addr << std::dec << std::endl;
+    
+            // 调用 page_in 处理缺页
+            if (page_in(v_addr, pid) != 0) {
+                std::cerr << "[ERROR] Failed to resolve page fault for address 0x"
+                          << std::hex << v_addr << std::dec << std::endl;
+                raiseInterrupt(InterruptType::PAGEFAULT, pid, v_addr, "Page fault during instruction read", nullptr, 0);
+                return -1;
+            }
+    
+            // 成功换入页面后重新翻译地址
+            result = translate_address(v_addr, pid, &p_addr);
+            if (result != 0) {
+                std::cerr << "[ERROR] Address translation failed after page in for 0x"
+                          << std::hex << v_addr << std::dec << std::endl;
+                return -1;
+            }
         } else if (result != 0) { // 其他错误
             std::cerr << "[ERROR] Failed to translate address 0x" << std::hex << v_addr << std::dec << std::endl;
             return -1;
@@ -434,12 +454,90 @@ void print_memory_usage() {
          << (V_PAGE_USE_SIZE - virtual_free) * PAGE_SIZE / 1024 << "KB/" 
          << V_PAGE_USE_SIZE * PAGE_SIZE / 1024 << "KB)" << std::endl;
 }
-//发送内存状态给UI
-int sendMemoryStatusToUI() {
-    //添加与UI通信的代码
-    //例如：统计并返回内存使用情况、页面置换次数等信息
-    return 0;
+
+void fillMemoryStatus(MemoryStatusForUI& status) {
+    // 填充总览信息
+    status.overview.page_size = PAGE_SIZE;
+    status.overview.total_physical_mem = MEMORY_SIZE;
+    status.overview.swap_total = DISK_SIZE;
+
+    // 计算已使用/可用物理内存
+    size_t physical_free = 0;
+    for (int i = 0; i < P_PAGE_USE_SIZE; ++i) {
+        if (!(p_page[i / 8] & (1 << (i % 8)))) {
+            ++physical_free;
+        }
+    }
+    status.overview.used_physical_mem = (P_PAGE_USE_SIZE - physical_free) * PAGE_SIZE;
+    status.overview.free_physical_mem = physical_free * PAGE_SIZE;
+
+    // 计算交换区使用量（遍历每个虚拟页是否在磁盘上）
+    size_t swap_used = 0;
+    for (int i = 0; i < V_PAGE_USE_SIZE; ++i) {
+        if (!page_table[i].in_memory && page_table[i].owner != FULL) {
+            ++swap_used;
+        }
+    }
+    status.overview.swap_used = swap_used * PAGE_SIZE;
+    status.overview.page_replacement_count = g_page_replacement_count;
+
+    // 页面信息
+    status.page_info.total_physical_pages = P_PAGE_USE_SIZE;
+    status.page_info.used_physical_pages = P_PAGE_USE_SIZE - physical_free;
+    status.page_info.total_virtual_pages = V_PAGE_USE_SIZE;
+
+    // 置换算法信息
+    status.replacement_info.current_clock_hand = clock_hand ? clock_hand->p_id : -1;
+    static int last_page_in = -1;
+    static int last_page_out = -1;
+    status.replacement_info.last_page_in = last_page_in;
+    status.replacement_info.last_page_out = last_page_out;
+    status.replacement_info.replacement_count = g_page_replacement_count;
+
+    // 进程内存映射表
+    for (int i = 0; i < PAGE_TABLE_SIZE; ++i) {
+        const PageTableItem& pt = page_table[i];
+        if (pt.owner == FULL || pt.v_id == FULL) continue;
+
+        ProcessMemoryMappingItem item;
+        item.pid = pt.owner;
+        item.page_count = 1;
+
+        // 虚拟地址范围
+        v_address v_start = pt.v_id * PAGE_SIZE;
+        v_address v_end = v_start + PAGE_SIZE - 1;
+        std::stringstream ss_v;
+        ss_v << "0x" << std::hex << v_start << "-0x" << v_end;
+        item.v_address_range = ss_v.str();
+
+        // 物理地址范围
+        if (pt.in_memory) {
+            p_address p_start = pt.p_id * PAGE_SIZE;
+            p_address p_end = p_start + PAGE_SIZE - 1;
+            std::stringstream ss_p;
+            ss_p << "0x" << std::hex << p_start << "-0x" << p_end;
+            item.p_address_range = ss_p.str();
+            item.status = "in_memory";
+        } else {
+            item.p_address_range = "N/A";
+            item.status = "swapped_out";
+        }
+
+        status.process_mappings.push_back(item);
+    }
 }
+
+void sendMemoryStatusToUI() {
+    MemoryStatusForUI status;
+    fillMemoryStatus(status);
+
+    // 使用 AIGC_JSON_HELPER 的序列化能力将 status 转换为 JSON 字符串
+    std::string jsonStr;
+    JsonHelper::ObjectToJson(status, jsonStr);
+    
+    std::cout << "Generated JSON:\n" << jsonStr << std::endl;
+}
+
 void test_memory1() {
     std::cout << "=== Testing Memory Management ===" << std::endl;
     init_memory();
@@ -826,5 +924,36 @@ void test_directory_operations() {
     //test_filesystem();
     //test_directory_operations();
     
+    return 0;
+}*/
+
+/*int main() {
+    // 初始化内存管理器
+    init_memory();
+
+    // 分配一些内存模拟运行中的进程
+    m_pid pid1 = 1001;
+    v_address addr1 = alloc_for_process(pid1, 4096);  // 分配一页内存
+    if (addr1 == FULL) {
+        std::cerr << "Failed to allocate memory for process 1" << std::endl;
+    } else {
+        std::cout << "Allocated memory at virtual address: 0x" << std::hex << addr1 << std::dec << std::endl;
+    }
+
+    m_pid pid2 = 1002;
+    v_address addr2 = alloc_for_process(pid2, 8192);  // 分配两页内存
+    if (addr2 == FULL) {
+        std::cerr << "Failed to allocate memory for process 2" << std::endl;
+    } else {
+        std::cout << "Allocated memory at virtual address: 0x" << std::hex << addr2 << std::dec << std::endl;
+    }
+
+    // 填充并输出内存状态
+    sendMemoryStatusToUI();
+
+    // 清理分配的内存
+    free_process_memory(pid1);
+    free_process_memory(pid2);
+
     return 0;
 }*/
