@@ -3,7 +3,7 @@
 #include <iomanip>
 #include <algorithm>
 
-
+FileSystem fs(1024, 4);
 
 FileSystem::FileSystem(int totalBlocks, int blockSize)
     : totalBlocks(totalBlocks), blockSize(blockSize) {

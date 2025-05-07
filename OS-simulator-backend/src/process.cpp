@@ -1,6 +1,3 @@
-#include <windows.h>
-#include <iostream>
-#include <filesystem>
 #include "../include/process.h"
 #include "../include/filesystem.h"
 #include "../include/memory.h"
@@ -9,12 +6,13 @@
 #define KERNELMODE 1
 
 #define SCHED_FCFS 0              
-#define SCHED_RR 1                
+#undef SCHED_RR
+#define PROCESS_SCHED_RR 1             
 #define SCHED_PRO 2               
 #define SCHED_RRP 3
 
-#define IN 0
-#define OUT 1
+#define PROCESS_IN 0
+#define PROCESS_OUT 1
 
 using namespace std;
 
@@ -52,8 +50,7 @@ void init() {
 	KeyBoardBusy = false;
 	printBusy = false;
 
-	cpu.pid = -1;
-	cpu.PC = 0;
+	
 
 	//此处需要补齐创建所有文件的互斥锁
 	vector<string>fileExist;
@@ -102,9 +99,7 @@ int DeviceControl() {
 
 void changePCBList(PCB& p, int state) {
 	for (list<PCB>::iterator it = PCBList.begin(); it != PCBList.end(); ++it) {
-		if (state == RUNNING) {
-			cpu.pid = p.pid;
-		}
+		
 		if (it->pid == p.pid) {
 			if (state == DEAD) {
 				it->program.pop_front();
@@ -363,7 +358,7 @@ void applyForResource(PCB& p) {
 		cout << "内存分配失败，进程pid=" << p.pid << "转入等待内存队列" << endl;
 		suspend(p);
 		if (blockList.size() > 0) {
-			MidTermScheduler(OUT);  //中期调度将处于阻塞状态的任务选择部分换出释放内存空间
+			MidTermScheduler(PROCESS_OUT);  //中期调度将处于阻塞状态的任务选择部分换出释放内存空间
 		}
 	}
 };
@@ -375,7 +370,7 @@ void pInterrupt(PCB& p, int reason) {
 	if (reason == NORMAL_SWITCH) {
 		p.cputime = -1;
 		p.program.pop_front();
-		cpu.pid = -1;
+		
 		CPUbusy = false;
 		ready(p);
 	}
@@ -542,7 +537,7 @@ void pInterrupt(PCB& p, int reason) {
 
 
 void MidTermScheduler(int inOrOut) {
-	if (inOrOut == OUT) {
+	if (inOrOut == PROCESS_OUT) {
 		int size = 0;
 		for (int i = 0; i < blockList.size(); ++i) {
 			pair<int, int> pcbPair = { INT_MAX, -1 };
@@ -570,7 +565,7 @@ void MidTermScheduler(int inOrOut) {
 			}
 		}
 	}
-	else if (inOrOut == IN) {
+	else if (inOrOut == PROCESS_IN) {
 		pair<int, int> pcbPair = { INT_MIN, -1 };
 		for (list<PCB>::iterator it = suspendList.begin(); it != suspendList.end(); ++it) {
 			if (it->prority > pcbPair.first && it->task_size < blocks) {
@@ -663,7 +658,7 @@ void updateTaskState() {
 		}
 	}
 	if (blocks > 5 && !suspendList.empty()) {
-		MidTermScheduler(IN);
+		MidTermScheduler(PROCESS_IN);
 	}
 };
 
@@ -739,7 +734,7 @@ void Execute() {
 				}
 			}
 			else {
-				if (policy == SCHED_RR) {
+				if (policy == PROCESS_SCHED_RR) {
 					for (list<PCB>::iterator it1 = PCBList.begin(); it1 != PCBList.end(); ++it1) {
 						if (it1->state == RUNNING) {
 							cout << "running" << endl;
