@@ -135,13 +135,13 @@ v_address alloc_for_device(int device_id, m_size size);
  * @param addr 返回分配的虚拟地址
  * @return 成功返回 0，失败返回 -1
  */
-int alloc_for_file(m_size size, v_address* addr);
+int alloc_for_file(m_size size, v_address* addr,m_pid owner = 1);
 
 /**
  * @brief 释放文件占用的内存
  * @param addr 释放的虚拟地址
  */
-void free_file_memory(v_address addr);
+void free_file_memory(v_address addr,m_pid owner = 1);
 
 /**
  * @brief 从指定地址读取数据

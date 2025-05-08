@@ -293,24 +293,27 @@ v_address alloc_for_device(int device_id, m_size size) {
 }
 
 //为文件分配内存
-int alloc_for_file(m_size size, v_address* addr) {
-    v_address allocated = alloc_for_process(FULL, size);
+int alloc_for_file(m_size size, v_address* addr, m_pid owner) {
+    v_address allocated = alloc_for_process(owner, size); // 使用指定进程ID分配内存
     if (allocated == FULL) return -1;
     *addr = allocated;
     return 0;
 }
 
 //释放文件占用的内存
-void free_file_memory(v_address addr) {
+void free_file_memory(v_address addr, m_pid owner) {
     page v_page_num = addr / PAGE_SIZE;
     PageTableItem& pt = page_table[v_page_num];
-    
-    if (pt.owner == FULL) { // 确保是文件内存
+
+    if (pt.owner == owner) { // 确保是该进程分配的文件内存
         v_page[v_page_num / 8] &= ~(1 << (v_page_num % 8));
         if (pt.in_memory) {
             p_page[pt.p_id / 8] &= ~(1 << (pt.p_id % 8));
         }
         memset(&pt, 0, sizeof(PageTableItem));
+    } else {
+        std::cerr << "[ERROR] Cannot free memory: Not owned by this process." << std::endl;
+        return;
     }
 }
 //地址转换
@@ -804,7 +807,7 @@ void test_memory_swap() {
 }
 void test_filesystem1() {
     std::cout << "\n=== Testing File System ===" << std::endl;
-    FileSystem fs(256, 4096);
+    //FileSystem fs(256, 4096);
 
     // 测试1：基础读写测试
     std::cout << "\n[Test 1] Basic read/write:" << std::endl;
@@ -957,6 +960,90 @@ void test_filesystem2() {
     string content = fs.readFile("/", "data.bin");
     std::cout << "Read data.bin: " << content.substr(0, 50) << "..." << std::endl;
 }
+
+void test_filesystem_with_memory() {
+    std::cout << "\n=== Testing File System and Memory Collaboration ===" << std::endl;
+
+    // 初始化文件系统和内存管理
+    init_memory();  // 初始化内存模块
+    FileSystem fs(256, 4096);  // 初始化文件系统（256块，每块4096字节）
+
+    // Step 1: 创建目录结构
+    std::cout << "[Step 1] Creating directory structure..." << std::endl;
+    fs.createDirectory("/", "home");
+    fs.createDirectory("/home", "user");
+    fs.createDirectory("/home/user", "docs");
+
+    fs.printDirectory("/");
+    fs.printDirectory("/home/user");
+
+    // Step 2: 创建并写入文件
+    std::cout << "\n[Step 2] Creating and writing to file..." << std::endl;
+    std::string content = "This is a sample text stored in memory and disk.";
+    fs.createFile("/home/user/docs", "sample.txt", FILE_TYPE, content.size());
+    fs.writeFile("/home/user/docs", "sample.txt", content);
+
+    // Step 3: 读取文件并验证
+    std::cout << "\n[Step 3] Reading file from disk..." << std::endl;
+    std::string readContent = fs.readFile("/home/user/docs", "sample.txt");
+    std::cout << "Read content: " << readContent << std::endl;
+
+    if (readContent == content) {
+        std::cout << "[PASS] File content verified successfully." << std::endl;
+    } else {
+        std::cerr << "[FAIL] File content mismatch!" << std::endl;
+    }
+
+    // Step 4: 将文件加载到内存中模拟程序使用
+    std::cout << "\n[Step 4] Loading file into memory for processing..." << std::endl;
+    m_pid pid = 1;
+    v_address mem_addr;
+
+    if (alloc_for_file(content.size(), &mem_addr, pid) != 0) { // 使用 pid=1
+        std::cerr << "[ERROR] Failed to allocate memory for file." << std::endl;
+        return;
+    }
+    std::cout << "Allocated virtual address: 0x" << std::hex << mem_addr << std::dec << std::endl;
+
+    // Step 5: 将文件内容复制到内存
+    p_address phys_addr;
+    int result = translate_address(mem_addr, pid, &phys_addr); // 这里使用相同 pid=1
+    if (result != 0) {
+        std::cerr << "[ERROR] Address translation failed." << std::endl;
+        return;
+    }
+
+    std::cout << "[DEBUG] Physical address: 0x" << std::hex << phys_addr << std::dec << std::endl;
+    memcpy(&memory[phys_addr], readContent.data(), readContent.size());
+
+    // Step 6: 从内存读回数据验证一致性
+    std::string processedData;
+    processedData.resize(readContent.size());
+    memcpy(&processedData[0], &memory[phys_addr], readContent.size());
+
+    std::cout << "Processed data from memory: " << processedData << std::endl;
+    if (processedData == content) {
+        std::cout << "[PASS] Data loaded into memory correctly." << std::endl;
+    } else {
+        std::cerr << "[FAIL] Memory data does not match original content." << std::endl;
+    }
+
+    // Step 7: 页面置换测试
+    std::cout << "\n[Step 5] Testing page replacement..." << std::endl;
+    v_address another_addr = alloc_for_process(2, 8192);
+    std::cout << "Another allocation at: 0x" << std::hex << another_addr << std::dec << std::endl;
+    print_memory_usage();
+
+    // Step 8: 清理资源
+    std::cout << "\n[Cleanup] Releasing all resources..." << std::endl;
+    free_file_memory(mem_addr);
+    fs.deleteFile("/home/user/docs", "sample.txt");
+    fs.deleteDirectoryRecursive("/home");
+
+    std::cout << "[INFO] Final root directory after cleanup:" << std::endl;
+    fs.printDirectory("/");
+}
+
 /*int main() {
     SetConsoleOutputCP(CP_UTF8);  // 设置控制台输出为 UTF-8 编码
     //test_memory1();
@@ -965,8 +1052,8 @@ void test_filesystem2() {
     //test_memory_swap();
     //test_filesystem1();
     //test_filesystem2();
-    test_directory_operations();
-    
+    //test_directory_operations();
+    test_filesystem_with_memory();
     return 0;
 }*/
 
