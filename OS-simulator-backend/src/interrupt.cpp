@@ -256,7 +256,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
                //产生设备中断，后续补充
                 int devicetype=stoi(scmd[2]);
                 int needtime=stoi(scmd[3]);
-                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",current_pcb->block_time,needtime);
+                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->block_time,needtime);
             }
 
         }else if(cmdType=="OUTPUT"){
@@ -267,7 +267,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 //产生设备中断，后续补充
                 int devicetype=stoi(scmd[2]);
                 int needtime=stoi(scmd[3]);
-                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",current_pcb->block_time,needtime);
+                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->block_time,needtime);
             }
 
         }else if(cmdType=="READFILE"){
@@ -491,7 +491,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
 
     }else if(cmdType == "P"){
         //创建进程
-        LongTermScheduler(scmd[1], scmd[2])
+        LongTermScheduler(scmd[1], scmd[2]);
 
     }else if(cmdType == "B"){
          // 阻塞进程

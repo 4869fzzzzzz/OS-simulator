@@ -2,6 +2,7 @@
 
 
 #include "headfile.h"
+#include "./interrupt.h"
 
 #include<stdio.h>
 #include<stdlib.h>
@@ -62,6 +63,8 @@ typedef int m_pid;
 const int MAX_SUSPEND_TIME = 100;
 const int MAX_BLOCK_TIME = 100;  // 最大阻塞时长阈值
 
+extern std::mutex ready_list_mutex;
+
 typedef struct process_struct {
 	int pid;//进程标识
 	int state;//标识进程的状态
@@ -118,6 +121,8 @@ extern list<PCB> readyList0;//就绪队列
 extern list<PCB> readyList1;
 extern list<PCB> blockList;//阻塞队列
 extern list<PCB> suspendList;//挂起队列
+
+
 
 //阻塞状态队列
 extern list<PCB> waitForKeyBoardList;//等待键盘队列
