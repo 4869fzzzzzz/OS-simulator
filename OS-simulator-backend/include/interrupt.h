@@ -117,7 +117,7 @@ struct CPU {
     CPU(int cpu_id) : id(cpu_id), busy(false), running_process(nullptr), running(false) {}
 };
 
-bool RUN(std::string cmd);//运行一条指令
+bool RUN(std::string cmd,PCB* current_pcb);//运行一条指令
 void CmdSplit(const std::string& cmd,std::vector<std::string>& scmd);//划分指令
 bool handleClientCmd(std::string cmd, std::string& result);
 void cpu_worker(CPU& cpu);

@@ -92,6 +92,7 @@ void handleInterrupt(){
         InterruptQueue.pop();
         iq.unlock();
         InterruptVectorTable[static_cast<int>(tmp.type)].handler(tmp.value1,tmp.value2,tmp.value3,tmp.value4,tmp.value5);
+        
     }
     iq.lock();
     while(!readyInterruptQueue.empty()){
@@ -210,7 +211,7 @@ time_t get_nowSysTime(){
 
 
 //运行一条指令
-bool RUN(std::string cmd){
+bool RUN(std::string cmd, PCB* current_pcb){
     std::vector<std::string> scmd;
     CmdSplit(cmd,scmd);
     if(scmd.size()<2){
@@ -253,8 +254,9 @@ bool RUN(std::string cmd){
                 return false;
             }else{
                //产生设备中断，后续补充
-                int deviceid=stoi(scmd[2]);
-
+                int devicetype=stoi(scmd[2]);
+                int needtime=stoi(scmd[3]);
+                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",current_pcb->block_time,needtime);
             }
 
         }else if(cmdType=="OUTPUT"){
@@ -263,8 +265,9 @@ bool RUN(std::string cmd){
                 return false;
             }else{
                 //产生设备中断，后续补充
-                int deviceid=stoi(scmd[2]);
-                
+                int devicetype=stoi(scmd[2]);
+                int needtime=stoi(scmd[3]);
+                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",current_pcb->block_time,needtime);
             }
 
         }else if(cmdType=="READFILE"){
@@ -476,7 +479,10 @@ void cpu_worker(CPU& cpu) {
             if (current_pcb->has_instruction()) {
                 if (current_pcb->current_instruction_time == 1) {
                     // 执行指令
-                    if (RUN(current_pcb->get_current_instruction())) {
+                    //2025.5.11
+                    //下面这里的if逻辑有问题
+                    //设备函数要到中断才去处理，应该立即将进程阻塞
+                    /**old**if (RUN(current_pcb->get_current_instruction())) {
                         //此处成功执行才会继续执行下一条指令
                         //主要是为了设备申请指令能够重复申请，避免一次未成功申请就跳出的情况
                         //只有设备申请失败会返回false以重新申请，其他指令执行失败会触发错误中断处理
@@ -488,7 +494,9 @@ void cpu_worker(CPU& cpu) {
                             //此处申请设备次数超过最大次数，处理逻辑待定
                             
                         }
-                    }
+                    }*/
+
+                    RUN(current_pcb->get_current_instruction());
                 } else {
                     current_pcb->current_instruction_time--;
                 }

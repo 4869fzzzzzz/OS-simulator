@@ -5,8 +5,9 @@
 #include <string>
 #include <thread>   // std::this_thread::sleep_for
 #include <chrono>   // std::chrono::seconds
+#include "../include/device.h"
 
-enum class InteruptType {
+/*enum class InteruptType {
     DeviceReady,
     DeviceError,
     IOCompleted,
@@ -22,81 +23,10 @@ void raiseInterupt(InteruptType t, int device_id, int value) {
     case InteruptType::Custom:      std::cout << "Custom"; break;
     }
     std::cout << ", 设备ID: " << device_id << ", 值: " << value << std::endl;
-}
+}*/
 
-enum class DeviceType {
-    Disk,
-    Printer,
-    Keyboard,
-    NetworkCard,
-    Other
-};
 
-class Device {
-private:
-    int id;
-    DeviceType type;
-    std::string name;
-    bool enabled;
-    bool hasInterrupt;
-
-public:
-    Device(int id, DeviceType type, const std::string& name)
-        : id(id), type(type), name(name), enabled(false), hasInterrupt(false) {}
-
-    int getId() const { return id; }
-    DeviceType getType() const { return type; }
-    std::string getName() const { return name; }
-    bool isEnabled() const { return enabled; }
-    bool isInterrupting() const { return hasInterrupt; }
-
-    void enable() { enabled = true; }
-    void disable() { enabled = false; }
-    void triggerInterrupt() { hasInterrupt = true; }
-    void clearInterrupt() { hasInterrupt = false; }
-
-    void generateInterupt(InteruptType type, int value) {
-        hasInterrupt = true;
-        raiseInterupt(type, id, value);
-    }
-
-    void printStatus() const {
-        std::cout << "[设备] ID: " << id
-            << ", 名称: " << name
-            << ", 类型: " << static_cast<int>(type)
-            << ", 状态: " << (enabled ? "启用" : "禁用")
-            << ", 中断: " << (hasInterrupt ? "是" : "否")
-            << std::endl;
-    }
-};
-
-class DeviceManager {
-private:
-    std::vector<std::shared_ptr<Device>> devices;
-    int nextId = 1;
-
-public:
-    std::shared_ptr<Device> createDevice(DeviceType type, const std::string& name) {
-        auto device = std::make_shared<Device>(nextId++, type, name);
-        devices.push_back(device);
-        return device;
-    }
-
-    std::shared_ptr<Device> findAvailableDevice(DeviceType type) {
-        for (auto& device : devices) {
-            if (device->getType() == type && !device->isEnabled()) {
-                return device;
-            }
-        }
-        return nullptr;
-    }
-
-    void printAllDevices() const {
-        for (const auto& device : devices) {
-            device->printStatus();
-        }
-    }
-};
+DeviceManager manager;
 
 // 创建所有设备
 void createDevices(DeviceManager& manager) {
@@ -110,9 +40,9 @@ void createDevices(DeviceManager& manager) {
     manager.createDevice(DeviceType::Other, "其他设备1");
 }
 
-// 调用中断请求设备
-bool callDeviceInterrupt(DeviceManager& manager, int pcb_id, DeviceType type, int seconds) {
-    auto device = manager.findAvailableDevice(type);
+// 调用中断请求设备--starttime为pid的阻塞开始时间，如果系统成功分配了设备，则返回当前时间，没有返回-1
+void callDeviceInterrupt(int pcb_id, int type, std::string info,int* starttime, int seconds) {
+    auto device = manager.findAvailableDevice(static_cast<DeviceType>(type));
     if (device) {
         device->enable();
         std::cout << "PCB " << pcb_id << " 请求设备: " << device->getName()
@@ -120,19 +50,18 @@ bool callDeviceInterrupt(DeviceManager& manager, int pcb_id, DeviceType type, in
 
         std::thread([device, seconds]() {
             std::this_thread::sleep_for(std::chrono::seconds(seconds));
-            device->generateInterupt(InteruptType::IOCompleted, seconds);
             device->disable();
             device->clearInterrupt();
             }).detach();
 
             std::cout << "返回：true，设备ID = " << device->getId() << std::endl;
-            return true;
+            *starttime = time_cnt.load();
     }
     std::cout << "返回：false，wrong（没有可用的该类型设备）" << std::endl;
-    return false;
+    *starttime = -1;
 }
 
-int main() {
+/*int main() {
     DeviceManager manager;
 
     createDevices(manager);
@@ -151,4 +80,4 @@ int main() {
     manager.printAllDevices();
 
     return 0;
-}
+}*/
