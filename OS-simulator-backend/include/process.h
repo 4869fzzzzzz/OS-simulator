@@ -1,5 +1,8 @@
 #pragma once
 
+
+#include "headfile.h"
+
 #include<stdio.h>
 #include<stdlib.h>
 #include<string>
@@ -42,6 +45,7 @@ typedef int m_pid;
 #define SCHED_RR 1                
 #define SCHED_PRO 2               
 #define SCHED_RRP 3
+
 
 #define NORMAL_SWITCH 0 //时间片轮转
 #define PREEMPTION_SWITCH 1 //抢占式中断

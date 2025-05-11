@@ -1,12 +1,16 @@
 #define _WINSOCK_DEPRECATED_NO_WARNINGS 1
 #include "../include/socket.h"
+#include "../include/interrupt.h"
 
 char recv_buf[1024] = { '0' };
 char send_buf[1024] = { '0' };
+SOCKET clientSocket;
 
 MySocket::MySocket()
 {
 	this->Init();
+	tv.tv_sec = 0;
+    tv.tv_usec = 1000;
 	this->Bind();
 	this->Listen();
 	
@@ -52,6 +56,10 @@ SOCKET MySocket::Accept()
 	
 }
 
+void MySocket::setNonBlocking(SOCKET sock) {
+	u_long mode = 1;  // 1表示非阻塞，0表示阻塞
+	ioctlsocket(sock, FIONBIO, &mode);
+}
 
 void MySocket::Send(char send_buf[]) {
 		send(this->sClient, send_buf, 1024, 0);
@@ -61,8 +69,55 @@ void MySocket::Send(char send_buf[]) {
 void MySocket::Recv(char recv_buf[]) {
 		recv(this->sClient, recv_buf, 1024, 0);
 		
-} 
+}
 
+void MySocket::HandleConnection() {
+    FD_ZERO(&this->readfds);
+    FD_SET(this->sServer, &this->readfds);
+    if(this->sClient != INVALID_SOCKET) {
+        FD_SET(this->sClient, &readfds);
+    }
+    
+    int activity = select(0, &readfds, NULL, NULL, &tv);
+    if (activity < 0) {
+        std::cerr << "select error: " << WSAGetLastError() << std::endl;
+        return;
+    }
+    
+    if (activity > 0) {
+        // 处理新连接
+        if(FD_ISSET(this->sServer, &readfds)) {
+            if(this->sClient == INVALID_SOCKET) {
+                if (this->Accept() == INVALID_SOCKET) {
+                    std::cerr << "Accept failed" << std::endl;
+                }
+            }
+        }
+        // 处理数据接收
+        if(this->sClient != INVALID_SOCKET && FD_ISSET(this->sClient, &readfds)) {
+            char buffer[1024] = {0};
+            int valread = recv(this->sClient, buffer, sizeof(buffer), 0);
+            
+            if(valread > 0) {
+                std::cout << "Received: " << buffer << std::endl;
+                // 处理数据
+				std::string result;
+				handleClientCmd(std::string(buffer), result);
+				//返回数据
+				result="OK:"+result;
+				send(this->sClient, result.c_str(), result.size(), 0);
+				std::cout << "Sent: " << result << std::endl;
+				result.clear();
+            } else if(valread == 0) {
+                std::cout << "Client disconnected" << std::endl;
+                closesocket(this->sClient);
+                this->sClient = INVALID_SOCKET;
+            } else {
+                std::cerr << "recv failed: " << WSAGetLastError() << std::endl;
+            }
+        }
+    }
+}
 void MySocket::Close()
 {
 	//关闭套接字
