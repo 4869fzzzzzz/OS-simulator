@@ -8,6 +8,8 @@
 
 extern char recv_buf[1024];
 extern char send_buf[1024];
+extern SOCKET clientSocket;
+
 
 class MySocket 
 {
@@ -17,6 +19,8 @@ public:
 	SOCKET sClient;      //定义SOCKET对象
 	SOCKADDR_IN server_addr, client_addr; //定义sockaddr_in对象
 	int clientnum = 0;
+	fd_set readfds; //定义读文件描述符集合
+	struct timeval tv;
 	
 	
 	/*thread thread_send;
@@ -28,9 +32,14 @@ public:
 	void Bind();
 	void Listen();
 	SOCKET Accept();
+	void setNonBlocking(SOCKET sock);
 	void Send(char send_buf[]);
 	void Recv(char recv_buf[]);
 	//void ThreadInit();
+	void HandleConnection();
+	bool isValid() const {
+        return sServer != INVALID_SOCKET;
+    }
 	
 	void Close();
 
