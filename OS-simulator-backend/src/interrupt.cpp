@@ -15,6 +15,7 @@ time_t startSysTime;
 time_t nowSysTime;
 std::thread th[2];
 std::atomic<int> interrupt_handling_cpus{0};  // 定义正在处理中断的CPU数量
+int scheduel;
 
 void Interrupt_Init(){ //中断初始化
     //初始化中断有效位
@@ -92,7 +93,6 @@ void handleInterrupt(){
         InterruptQueue.pop();
         iq.unlock();
         InterruptVectorTable[static_cast<int>(tmp.type)].handler(tmp.value1,tmp.value2,tmp.value3,tmp.value4,tmp.value5);
-        
     }
     iq.lock();
     while(!readyInterruptQueue.empty()){
@@ -300,7 +300,41 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 return true;
             }else{
                 int tpid=stoi(scmd[2]);
-                
+
+                PCB found;
+                bool isFound = false; // 标记是否找到进程
+
+                // 查找并移除进程
+                for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
+                    if (it->pid == tpid) {
+                        found = *it;
+                        readyList0.erase(it);  // 从 readyList0 中移除
+                        isFound = true;
+                        break;
+                    }
+                }
+
+                if (!isFound) {
+                    for (auto it = readyList1.begin(); it != readyList1.end(); ++it) {
+                        if (it->pid == tpid) {
+                            found = *it;
+                            readyList1.erase(it);  // 从 readyList1 中移除
+                            isFound = true;
+                            break;
+                        }
+                    }
+                }
+
+                if (isFound) {
+                    std::cout << "Process with PID " << tpid << " has been blocked." << std::endl;
+                    found.blocktype = SYSTEM;
+                    found.block_time = get_nowSysTime();
+                    block(&found);
+                }
+                else {
+                    std::cout << "Process does not exist or process can't be blocked." << std::endl;
+                    return false;
+                }
                 return true;
             }
 
@@ -309,7 +343,34 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
                 return true;
             }else{
-                int tpid=stoi(scmd[2]);
+                int tpid=stoi(scmd[2]);  
+
+                PCB found;
+                bool isFound = false; // 标记是否找到进程
+
+                for (auto it = blockList.begin(); it != blockList.end(); ++it) {
+                    if (it->pid == tpid) {
+                        found = *it;
+                        if (found.blocktype == SYSTEM)
+                            blockList.erase(it);
+                        else
+                            break;
+                        isFound = true;
+                        break;
+                    }
+                }
+
+                if (isFound) {
+                    std::cout << "Process with PID " << tpid << " has been waked." << std::endl;
+                    found.blocktype = NOTBLOCK;
+                    found.block_time = 0;
+                    ready(&found);
+                }
+                else {
+                    std::cout << "Process does not exist or process can't be awake." << std::endl;
+                    return false;
+                }
+
                 return true;
             }
         }else{
@@ -430,12 +491,68 @@ bool handleClientCmd(std::string cmd, std::string& result) {
 
     }else if(cmdType == "P"){
         //创建进程
+        LongTermScheduler(scmd[1], scmd[2])
 
     }else if(cmdType == "B"){
-        //阻塞进程
+         // 阻塞进程
+         int pid = stoi(scmd[1]);
+
+         PCB found;
+         bool isFound = false; // 标记是否找到进程
+  
+         // 查找并移除进程
+         for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
+             if (it->pid == pid) {
+                 found = *it;
+                 readyList0.erase(it);  // 从 readyList0 中移除
+                 isFound = true;
+                 break;
+             }
+         }
+  
+         if (!isFound) {
+             for (auto it = readyList1.begin(); it != readyList1.end(); ++it) {
+                 if (it->pid == pid) {
+                     found = *it;
+                     readyList1.erase(it);  // 从 readyList1 中移除
+                     isFound = true;
+                     break;
+                 }
+             }
+         }
+  
+            if (isFound) {
+                std::cout << "Process with PID " << pid << " has been blocked." << std::endl;
+                found.blocktype = USER;
+                found.block_time = get_nowSysTime();
+                block(&found);  
+            }
+            else {
+                std::cout << "Process does not exist or process can't be blocked." << std::endl;
+            }
 
     }else if(cmdType == "K"){
         //唤醒进程
+        int targetPid = std::stoi(scmd[1]);  // 获取目标pid（假设scmd[1]是一个字符串）
+        bool found = false;
+
+        // 遍历阻塞队列，找到目标pid的进程
+        for (auto it = blockList.begin(); it != blockList.end(); ++it) {
+            PCB* process = *it;
+            if (process->pid == targetPid) {
+                // 找到了目标进程
+                blockList.erase(it);  // 从阻塞队列中移除该进程
+                process->block_time = 0;
+                ready(&process);
+                cout << "进程 " << process->pid << " 被唤醒" << endl;
+                found = true;
+                break;
+            }
+        }
+
+        if (!found) {
+            cout << "未找到pid为 " << targetPid << " 的进程" << endl;
+        }
 
     }else if(cmdType == "E"){
         //退出系统
@@ -453,7 +570,16 @@ void cpu_worker(CPU& cpu) {
     while (cpu.running) {
         PCB* current_pcb = nullptr;
         //短期调度
-        
+        if (scheduel == SCHED_RRP) {
+            RRP_sche();
+        }
+        else if (scheduel == SCHED_RR) {
+
+        }
+        else if (scheduel == SCHED_PRO) {
+            pro_sche();
+        }
+
         
         // 获取就绪进程
         {
@@ -486,7 +612,7 @@ void cpu_worker(CPU& cpu) {
                         //此处成功执行才会继续执行下一条指令
                         //主要是为了设备申请指令能够重复申请，避免一次未成功申请就跳出的情况
                         //只有设备申请失败会返回false以重新申请，其他指令执行失败会触发错误中断处理
-                        current_pcb->instructions.pop();
+                        current_pcb->program.clear();
                     } else {
                         current_pcb->apply_time++;
                         current_pcb->current_instruction_time = 1;
@@ -509,7 +635,7 @@ void cpu_worker(CPU& cpu) {
                 if (bytes_read > 0) {
                     // 解析指令
                     std::string instruction(instruction_buffer);
-                    current_pcb->instructions.push(instruction);
+                    current_pcb->program = instruction;
         
                     // 更新程序计数器
                     current_pcb->address += bytes_read;
