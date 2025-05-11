@@ -4,6 +4,7 @@
 #include <iostream>
 #include <cstring>
 #include <vector>
+#include "AIGCJson.hpp"
 
 typedef unsigned int m_pid;       // 进程 ID
 typedef unsigned int m_size;      // 内存大小
@@ -57,7 +58,64 @@ extern page_bit v_page[V_PAGE_USE_SIZE];         // 虚拟页面使用情况 1�
 extern page_bit p_page[P_PAGE_USE_SIZE];         // 物理页面使用情况
 extern Frame* clock_hand;                        // Clock 置换算法的指针
 extern atom_data memory[MEMORY_SIZE];            // 物理内存
-extern atom_data disk[DISK_SIZE];                // 模拟磁盘
+extern atom_data disk[DISK_SIZE];         
+
+class MemoryOverview {
+public:
+    size_t page_size;            // 页面大小（4KB）
+    size_t total_physical_mem;   // 物理内存总大小（字节）
+    size_t used_physical_mem;    // 已使用物理内存（字节）
+    size_t free_physical_mem;    // 可用物理内存（字节）
+    size_t swap_total;           // 交换区总大小（字节）
+    size_t swap_used;            // 已使用交换区大小（字节）
+    size_t page_replacement_count; // 页面置换次数
+
+    AIGC_JSON_HELPER(page_size, total_physical_mem, used_physical_mem,
+                      free_physical_mem, swap_total, swap_used,
+                      page_replacement_count)
+};
+
+class MemoryPageInfo {
+public:
+    int total_physical_pages;     // 物理页面数
+    int used_physical_pages;      // 已使用物理页面数
+    int total_virtual_pages;      // 虚拟页面数
+
+    AIGC_JSON_HELPER(total_physical_pages, used_physical_pages, total_virtual_pages)
+};
+
+class PageReplacementInfo {
+public:
+    int current_clock_hand;       // 当前时钟指针指向的物理页号
+    int last_page_in;             // 最近换入页面号
+    int last_page_out;            // 最近换出页面号
+    size_t replacement_count;     // 页面置换次数
+
+    AIGC_JSON_HELPER(current_clock_hand, last_page_in, last_page_out, replacement_count)
+};
+
+class ProcessMemoryMappingItem {
+public:
+    m_pid pid;                    // 进程 ID
+    std::string v_address_range;  // 虚拟地址范围（如 "0x1000-0x2000"）
+    std::string p_address_range;  // 物理地址范围（如 "0x5000-0x6000"）
+    int page_count;               // 页面数量
+    std::string status;           // 状态：in_memory / swapped_out
+
+    AIGC_JSON_HELPER(pid, v_address_range, p_address_range, page_count, status)
+};
+
+class MemoryStatusForUI {
+public:
+    MemoryOverview overview;
+    MemoryPageInfo page_info;
+    PageReplacementInfo replacement_info;
+    std::vector<ProcessMemoryMappingItem> process_mappings;
+
+    AIGC_JSON_HELPER(overview, page_info, replacement_info, process_mappings)
+};
+
+void fillMemoryStatus(MemoryStatusForUI& status);
 
 //初始化内存管理模块
 void init_memory();
@@ -77,13 +135,13 @@ v_address alloc_for_device(int device_id, m_size size);
  * @param addr 返回分配的虚拟地址
  * @return 成功返回 0，失败返回 -1
  */
-int alloc_for_file(m_size size, v_address* addr);
+int alloc_for_file(m_size size, v_address* addr,m_pid owner = 1);
 
 /**
  * @brief 释放文件占用的内存
  * @param addr 释放的虚拟地址
  */
-void free_file_memory(v_address addr);
+void free_file_memory(v_address addr,m_pid owner = 1);
 
 /**
  * @brief 从指定地址读取数据
@@ -133,7 +191,7 @@ int page_out(p_address p_addr, m_pid pid);
  * @param data 返回数据（可选）
  * @param flag 标志位
  */
-void Pagefault(int pid, int v_addr, std::string info, int* data, int flag);
+//void Pagefault(int pid, int v_addr, std::string info, int* data, int flag);
 
 /**
  * @brief 地址转换，将虚拟地址转换为物理地址
@@ -150,9 +208,6 @@ int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr
  * @brief 打印内存使用情况
  */
 void print_memory_usage();
-
-//将内存状态发给ui
-int sendMemoryStatusToUI();
 
 
 
