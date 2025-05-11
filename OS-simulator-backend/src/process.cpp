@@ -1,4 +1,4 @@
-#include "process.h"
+#include "../include/process.h"
 #include <list>
 #include <string>
 #include <iostream>
@@ -13,6 +13,8 @@ list<PCB> readyList0; // CPU0 的就绪队列
 list<PCB> readyList1; // CPU1 的就绪队列
 list<PCB> blockList; //阻塞队列
 list<PCB> suspendList; //挂起队列
+
+std::mutex ready_list_mutex;
 
 list<PCB> waitForKeyBoardList;//等待键盘队列
 list<PCB> waitForPrintList;//等待打印机队列
@@ -295,7 +297,7 @@ void waitForFile(string filePath, string fileName) {
 
 void waitForKeyBoard() {
     //检查当前的wait队列 看是否有进程正在等待或占用键盘
-    int Timer = get_nowSysTime()
+    int Timer = get_nowSysTime();
     if (DeviceControl() != -1) {//如果键盘未被占用
         if (!waitForKeyBoardList.empty()) {
             cout << "Timer=" << Timer << " 进程pid=" << waitForKeyBoardList.front().pid << "开始占用键盘" << endl;
@@ -623,7 +625,7 @@ void LongTermScheduler(string path, string filename) {
     PCBList.push_back(p);
 }
 
-void `parse_and_execute(const string& instruction, PCB& p) {
+void parse_and_execute(const string& instruction, PCB& p) {
     // 将指令分割为 tokens
     istringstream iss(instruction);
     vector<string> tokens;
@@ -1028,11 +1030,11 @@ void updateTaskState() {
         }
     }
     
-    MidTermScheduler(1,null);
+    MidTermScheduler(1, nullptr);
 
 }
 
-void MidTermScheduler(int inOrOut, PCB& p) {
+void MidTermScheduler(int inOrOut, PCB* p) {
     int Timer = get_nowSysTime();
     if (inOrOut == 0) {//OUT
         int size = 0;
@@ -1148,7 +1150,7 @@ void MidTermScheduler(int inOrOut, PCB& p) {
                 if (it->pid == pcbPair.second) {
                     PCB& p = *it;
                     
-                    applyForSuspend(p)
+                    applyForSuspend(p);
                     return;
                 }
             }
