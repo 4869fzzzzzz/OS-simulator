@@ -191,7 +191,7 @@ int page_out(p_address p_addr, m_pid pid);
  * @param data 返回数据（可选）
  * @param flag 标志位
  */
-//void Pagefault(int pid, int v_addr, std::string info, int* data, int flag);
+void Pagefault(int pid, int v_addr, std::string info, int* data, int flag);
 
 /**
  * @brief 地址转换，将虚拟地址转换为物理地址
