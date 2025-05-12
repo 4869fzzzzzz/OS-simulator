@@ -10,8 +10,8 @@ int main(){
     SetConsoleOutputCP(CP_UTF8);
     //socket初始化
 #if SOCKETBEGIN
-    MySocket serverSocket;
-    if (!serverSocket.isValid()) {
+    
+    /*if (!serverSocket.isValid()) {
         std::cerr << "Socket 初始化失败" << std::endl;
         return 1;
     }
@@ -20,7 +20,9 @@ int main(){
     } catch (const std::exception& e) {
         std::cerr << "设置非阻塞模式失败: " << e.what() << std::endl;
         return 1;
-    }
+    }*/
+    std::thread recv_thread(RecvThread);
+    while(!serverSocket.acceptflag){}
 #else   
     /*std::vector<string> tcmd;
     tcmd.push("")
@@ -37,7 +39,6 @@ int main(){
     while(1){
         //处理客户端请求
         #if SOCKETBEGIN
-        serverSocket.HandleConnection();
         //长期调度（取消某些进程申请的内存），创建PCB
         //此处在遍历检查阻塞队列时，如果有设备申请的进程成功申请到设备，要检查其占用时间是否已过，
         //如果已经过了，就将其从阻塞队列中移除，并且去除当前运行指令

@@ -40,7 +40,11 @@ public:
 	bool isValid() const {
         return sServer != INVALID_SOCKET;
     }
+	bool acceptflag;
 	
 	void Close();
 
 };
+
+extern MySocket serverSocket;
+void RecvThread();
