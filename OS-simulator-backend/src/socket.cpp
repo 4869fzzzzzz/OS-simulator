@@ -9,8 +9,8 @@ SOCKET clientSocket;
 MySocket::MySocket()
 {
 	this->Init();
-	tv.tv_sec = 0;
-    tv.tv_usec = 1000;
+	tv.tv_sec = 1;
+    tv.tv_usec = 0;
 	this->Bind();
 	this->Listen();
 	
@@ -20,7 +20,7 @@ MySocket::MySocket()
 void MySocket::Init()
 {
 	WSAStartup(MAKEWORD(2, 2), &this->wsd);
-
+	acceptflag=false;
 	this->sServer = socket(AF_INET, SOCK_STREAM, 0);
 
 }
@@ -52,6 +52,8 @@ SOCKET MySocket::Accept()
 	//接受客户端连接
 	int len = sizeof(SOCKADDR);
 	this->sClient=accept(this->sServer, (SOCKADDR*)&this->client_addr, &len);
+	clientSocket=this->sClient;
+	acceptflag=true;
 	return this->sClient;
 	
 }
@@ -124,4 +126,34 @@ void MySocket::Close()
 	closesocket(this->sClient);
 	closesocket(this->sServer);
 	WSACleanup();
+}
+
+MySocket serverSocket;
+
+void RecvThread(){
+	clientSocket = serverSocket.Accept();
+    SOCKADDR_IN client_addr = serverSocket.client_addr;
+	while(1){
+		char buffer[1024] = {0};
+		int valread = recv(clientSocket, buffer, sizeof(buffer), 0);
+		
+		if(valread > 0) {
+			std::cout << "Received: " << buffer << std::endl;
+			// 处理数据
+			std::string result;
+			handleClientCmd(std::string(buffer), result);
+			//返回数据
+			result="OK:"+result;
+			send(clientSocket, result.c_str(), result.size(), 0);
+			std::cout << "Sent: " << result << std::endl;
+			result.clear();
+		} else if(valread == 0) {
+			std::cout << "Client disconnected" << std::endl;
+			closesocket(clientSocket);
+			exit(0);
+			clientSocket = INVALID_SOCKET;
+		} else {
+			std::cerr << "recv failed: " << WSAGetLastError() << std::endl;
+		}
+	}
 }

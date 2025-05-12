@@ -52,7 +52,7 @@ void Interrupt_Init(){ //中断初始化
     //设置标志位
     handleFlag.store(0);
     stopTimerFlag.store(0);
-    timerInterruptValid.store(0);
+    timerInterruptValid.store(1);
     time_cnt.store(0);
     th[0]=std::thread(TimeThread,Normal_Timer_Interval);
     th[0].detach();
@@ -78,29 +78,31 @@ void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int 
 //中断处理
 void handleInterrupt(){
     // 增加处理中断的CPU计数
+    std::cout<<"处理中断"<<std::endl;
     interrupt_handling_cpus++;
     // 等待另一个CPU也进入中断处理
     while (interrupt_handling_cpus < 2) {
         std::this_thread::yield();
     }
+    
     handleFlag.store(1);
     while(!InterruptQueue.empty()){
-        iq.lock();
+        std::lock_guard<std::mutex> lock(iq);
         if (InterruptQueue.empty()) {
             return;
         }
         Interrupt tmp=InterruptQueue.top();
         InterruptQueue.pop();
-        iq.unlock();
+        
         InterruptVectorTable[static_cast<int>(tmp.type)].handler(tmp.value1,tmp.value2,tmp.value3,tmp.value4,tmp.value5);
     }
-    iq.lock();
+    std::lock_guard<std::mutex> lock(iq);
     while(!readyInterruptQueue.empty()){
         Interrupt tmp=readyInterruptQueue.front();
         InterruptQueue.push(tmp);
         readyInterruptQueue.pop();
     }
-    iq.unlock();
+    
     // 减少处理中断的CPU计数
     interrupt_handling_cpus--;
     handleFlag.store(0);
@@ -177,14 +179,21 @@ void TimeThread(int interval = Normal_Timer_Interval) {
     time(&startSysTime); // 获取系统启动时间
     nowSysTime = startSysTime; // 初始化当前系统时间
     while (!stopTimerFlag.load()) {
-        //std::cout << "Timer thread running..." << std::endl; // 调试输出
+        //std::cout << "时钟 thread running..." << std::endl; // 调试输出
         if (timerInterruptValid.load()) {
+            std::cout<<"产生时钟中断"<<std::endl;
             raiseInterrupt(InterruptType::TIMER, 0, 0, "", nullptr, 0);
         }
         time_cnt.fetch_add(1);
+        
         if((valid.load()|1<<static_cast<int>(InterruptType::SNAPSHOT))&&time_cnt.load()%10==0){
+        #if SOCKETBEGIN
             raiseInterrupt(InterruptType::SNAPSHOT, 0, 0, "", nullptr, 0);
+        #else
+            
+        #endif
         }
+        
         nowSysTime =startSysTime+(time_cnt.load()*interval)/ 1000; // interval 是毫秒，转换为秒
         //std::cout << timeToChar(nowSysTime) << std::endl;
         // 延迟 interval 毫秒
@@ -684,6 +693,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
 void cpu_worker(CPU& cpu) {
     cpu.running = true;
     while (cpu.running) {
+        //std::cout<<"running"<<std::endl;
         PCB* current_pcb = nullptr;
         //短期调度
         shortScheduler();  
