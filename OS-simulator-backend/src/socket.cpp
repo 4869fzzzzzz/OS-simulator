@@ -9,8 +9,8 @@ SOCKET clientSocket;
 MySocket::MySocket()
 {
 	this->Init();
-	tv.tv_sec = 0;
-    tv.tv_usec = 1000;
+	tv.tv_sec = 1;
+    tv.tv_usec = 0;
 	this->Bind();
 	this->Listen();
 	

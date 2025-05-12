@@ -39,5 +39,6 @@
 #include "rapidjson/stringbuffer.h"
 #include "AIGCJson.hpp"
 
+#define SOCKETBEGIN 0
 using namespace aigc;
 
