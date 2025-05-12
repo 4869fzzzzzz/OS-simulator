@@ -1,9 +1,3 @@
-#pragma once
-
-
-#include "headfile.h"
-#include "./interrupt.h"
-
 #include<stdio.h>
 #include<stdlib.h>
 #include<string>
@@ -17,6 +11,7 @@
 #include<map>
 #include<time.h>
 #include<sstream>
+#include <mutex>
 using namespace std;
 //下面这里全都删掉
 typedef unsigned int v_address;
@@ -62,7 +57,9 @@ typedef int m_pid;
 
 const int MAX_SUSPEND_TIME = 100;
 const int MAX_BLOCK_TIME = 100;  // 最大阻塞时长阈值
-
+const int MAX_PCB_COUNT = 100; //最大PCB列表长度
+int SCHE0;//CPU0调度策略
+int SCHE1;//CPU1调度策略
 extern std::mutex ready_list_mutex;
 
 typedef struct process_struct {
@@ -73,10 +70,10 @@ typedef struct process_struct {
 	int cpu_num;//即将占用的cpu编号
 
 	int cputime;//进程占用CPU的时间
+	int servicetime;//进程所需CPU的时间
 	int cpuStartTime;//进程开始占用CPU的时间
-	int keyboardStartTime;//进程开始占用键盘输入的时间
-	int printStartTime;//进程开始占用输出的时间
-	int filewriteStartTime;//进程开始占用文件写入的时间
+	int deviceStartTime;//进程开始占用设备的时间
+    int deviceTime;
 	int createtime;//进程创建时间 到达时间
 	int block_time;//阻塞开始时间
 	int suspend_time;  // 挂起开始时间
@@ -88,7 +85,7 @@ typedef struct process_struct {
 	string fsState;//访问文件的方式
 	string content;//写入文件的内容
 
-	int task_size;//占用内存块数
+	int task_size;//占用内存大小
 	bool is_apply;//是否分配了内存
 	v_address address;//进程在内存中的起始虚拟地址
 	v_address next_v;//进程即将读取的字符虚拟地址
@@ -104,11 +101,10 @@ typedef struct process_struct {
 	}
 }PCB;
 
-typedef struct CPU {
-	bool isbusy;//程序计数器
-	int pid;//占用CPU的PCB
-	int schedule;//调度策略
-}CPU;
+struct WaitingProcess {
+    string filePath;
+    string fileName;
+};
 
 typedef struct mutexInfo {
 	bool isBusy;
@@ -122,7 +118,7 @@ extern list<PCB> readyList1;
 extern list<PCB> blockList;//阻塞队列
 extern list<PCB> suspendList;//挂起队列
 
-
+extern list<WaitingProcess> waitingProcessList;//正在等待PCB位置的进程文件
 
 //阻塞状态队列
 extern list<PCB> waitForKeyBoardList;//等待键盘队列
@@ -131,22 +127,18 @@ extern list<PCB> waitForPrintList;//等待打印机队列
 
 void applyForResource(PCB& p);//进程在创建态申请资源
 
-PCB create(const string& path, const string& filename, int M, int Y);
+PCB create(const string& path, const string& filename, int M, int Y,int alltime);
 void ready(PCB& p);//就绪原语
 void block(PCB& p);//阻塞原语
 void stop(PCB& p);//结束原语
 void suspend(PCB& p);//挂起原语
 
-void LongTermScheduler(string path, string filename);//长期调度程序
+void LongTermScheduler();//长期调度程序
 void MidTermScheduler(int inOrOut, PCB& p);//中期调度程序
 void CPUScheduler(PCB& p, int cpu);//短期调度程序
 
 void execute();//进程执行函数
 void updateTaskState();//进程状态更新函数
 
-void pro_sche();//优先级调度排序
-void RRP_sche();//响应比调度排序
-void FILE_delete(PCB& p);
-void Print_delete(PCB& p);
-void Keyboard_delete(PCB& p);
-void removePCBFromQueue(PCB* current_pcb);
+void sortReadyListByResponseRatio(list<PCB>& readyList);//响应比
+void sortReadyListByPriority(list<PCB>& readyList);//优先级
