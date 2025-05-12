@@ -70,9 +70,9 @@ void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int 
     if(handleFlag.load()){
         readyInterruptQueue.push(itp);
     }else{
-        iq.lock();
+        std::lock_guard<std::mutex> lock(iq);
         InterruptQueue.push(itp);
-        iq.unlock();
+       
     } 
 }
 //中断处理
@@ -316,7 +316,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 bool isFound = false;
 
                 // 使用互斥锁保护就绪队列操作
-                ready_list_mutex.lock();
+                std::lock_guard<std::mutex> lock(ready_list_mutex);
                 {
                     // 先从 readyList0 查找
                     for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
@@ -340,7 +340,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
                         }
                     }
                 }
-                ready_list_mutex.unlock();
+                
 
                 if (isFound && found != nullptr) {
                     // 更新进程状态
@@ -349,9 +349,9 @@ bool RUN(std::string cmd, PCB* current_pcb){
                     found->start_block_time = time_cnt.load();
                     
                     // 使用互斥锁保护阻塞队列操作
-                    blockList_mutex.lock();
+                    std::lock_guard<std::mutex> lock(blockList_mutex);
                     blockList.push_back(*found);
-                    blockList_mutex.unlock();
+                    
                     
                     delete found; // 释放临时对象
                     std::cout << "[INFO] Process " << tpid << " has been blocked successfully." << std::endl;
@@ -371,7 +371,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 bool isFound = false;
 
                 // 1. 先在阻塞队列中查找
-                blockList_mutex.lock();
+                std::lock_guard<std::mutex> lock(blockList_mutex);
                 for (auto it = blockList.begin(); it != blockList.end(); ++it) {
                     if (it->pid == tpid) {
                         found = *it;
@@ -381,11 +381,11 @@ bool RUN(std::string cmd, PCB* current_pcb){
                         break;
                     }
                 }
-                blockList_mutex.unlock();
+                
 
                 // 2. 如果阻塞队列中未找到，则在挂起队列中查找
                 if (!isFound) {
-                    suspendList_mutex.lock();
+                    std::lock_guard<std::mutex> lock(suspendList_mutex);
                     for (auto it = suspendList.begin(); it != suspendList.end(); ++it) {
                         if (it->pid == tpid) {
                             found = *it;
@@ -395,7 +395,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
                             break;
                         }
                     }
-                    suspendList_mutex.unlock();
+                    
                     
                     // 如果是挂起进程，需要重新分配内存
                     if (isFound) {
@@ -403,9 +403,9 @@ bool RUN(std::string cmd, PCB* current_pcb){
                             std::cout << "[INFO] Successfully allocated memory for process " << tpid << std::endl;
                         } else {
                             std::cout << "[ERROR] Failed to allocate memory for process " << tpid << std::endl;
-                            suspendList_mutex.lock();
+                            std::lock_guard<std::mutex> lock(suspendList_mutex);
                             suspendList.push_back(found);
-                            suspendList_mutex.unlock();
+                            
                             return true;
                         }
                     }
@@ -473,7 +473,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         }
         std::string cata = scmd[1];
         std::string filename = scmd[2];
-        if(fs.createFile(cata,filename,0,0)){
+        if(fs.createFile(cata,filename,0,0)==0){
             std::cout << "Create file success: " << filename << std::endl;
             result = "Create file success: " + filename;
             return true;
@@ -491,7 +491,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         }
         std::string cata = scmd[1];
         std::string filename = scmd[2];
-        if(fs.deleteFile(cata,filename)){
+        if(fs.deleteFile(cata,filename)==0){
             std::cout << "Delete file success: " << filename << std::endl;
             result = "Delete file success: " + filename;
             return true;
@@ -510,7 +510,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         std::string cata = scmd[1];
         std::string filename = scmd[2];
         std::string content = scmd[3];
-        if(fs.writeFile(cata,filename,content)){
+        if(fs.writeFile(cata,filename,content)==0){
             std::cout << "Write file success: " << filename << std::endl;
             result = "Write file success: " + filename;
             return true;
@@ -546,9 +546,9 @@ bool handleClientCmd(std::string cmd, std::string& result) {
        pPCB newProcess;
        newProcess.path = scmd[1];
        newProcess.filename = scmd[2];
-       prePCBList_mutex.lock();
+       std::lock_guard<std::mutex> lock(prePCBList_mutex);
        prePCBList.push_back(newProcess);
-       prePCBList_mutex.unlock();
+       result = "Create Process";
        std::cout << "成功创建待创建进程" << newProcess.filename << std::endl;
 
     }// 在 handleClientCmd 函数中替换原有的 "B" 和 "K" 分支
@@ -564,7 +564,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         bool isFound = false;
 
         // 使用互斥锁保护就绪队列操作
-        ready_list_mutex.lock();
+        std::lock_guard<std::mutex> lock(ready_list_mutex);
         {
             // 先从 readyList0 查找
             for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
@@ -588,7 +588,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
                 }
             }
         }
-        ready_list_mutex.unlock();
+        
 
         if (isFound && found != nullptr) {
             // 更新进程状态
@@ -597,9 +597,8 @@ bool handleClientCmd(std::string cmd, std::string& result) {
             found->start_block_time = time_cnt.load();
             
             // 使用互斥锁保护阻塞队列操作
-            blockList_mutex.lock();
+            std::lock_guard<std::mutex> lock(blockList_mutex);
             blockList.push_back(*found);
-            blockList_mutex.unlock();
             
             delete found;
             result = "[INFO] Process " + to_string(tpid) + " has been blocked successfully.";
@@ -624,7 +623,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         bool isFound = false;
 
         // 先在阻塞队列中查找
-        blockList_mutex.lock();
+        std::lock_guard<std::mutex> lock(blockList_mutex);
         for (auto it = blockList.begin(); it != blockList.end(); ++it) {
             if (it->pid == tpid) {
                 found = *it;
@@ -634,11 +633,11 @@ bool handleClientCmd(std::string cmd, std::string& result) {
                 break;
             }
         }
-        blockList_mutex.unlock();
+        
 
         // 如果阻塞队列中未找到，则在挂起队列中查找
         if (!isFound) {
-            suspendList_mutex.lock();
+            std::lock_guard<std::mutex> lock(suspendList_mutex);
             for (auto it = suspendList.begin(); it != suspendList.end(); ++it) {
                 if (it->pid == tpid) {
                     found = *it;
@@ -648,7 +647,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
                     break;
                 }
             }
-            suspendList_mutex.unlock();
+            
             
             // 如果是挂起进程，需要重新分配内存
             if (isFound) {
@@ -656,9 +655,8 @@ bool handleClientCmd(std::string cmd, std::string& result) {
                     std::cout << "[INFO] Successfully allocated memory for process " << tpid << std::endl;
                 } else {
                     std::cout << "[ERROR] Failed to allocate memory for process " << tpid << std::endl;
-                    suspendList_mutex.lock();
+                    std::lock_guard<std::mutex> lock(suspendList_mutex);
                     suspendList.push_back(found);
-                    suspendList_mutex.unlock();
                     result = "[ERROR] Failed to allocate memory for process " + to_string(tpid);
                     return false;
                 }
@@ -698,7 +696,7 @@ void cpu_worker(CPU& cpu) {
         //短期调度
         shortScheduler();  
         // 获取就绪进程
-        ready_list_mutex.lock();
+        std::lock_guard<std::mutex> lock(ready_list_mutex);
         {
             if(cpu.id==0){
                 if (!readyList0.empty()) {
@@ -716,7 +714,7 @@ void cpu_worker(CPU& cpu) {
                 }
             }
         }
-        ready_list_mutex.unlock();
+        
         int pcb_exist_flag=1;
         // 处理当前进程
         if (current_pcb != nullptr) {
@@ -725,9 +723,9 @@ void cpu_worker(CPU& cpu) {
                     if(!RUN(current_pcb->get_current_instruction(),current_pcb)){
                         current_pcb->state=BLOCK;
                         current_pcb->blocktype=DEVICEB;
-                        blockList_mutex.lock();
+                        std::lock_guard<std::mutex> lock(blockList_mutex);
                         blockList.push_back(*current_pcb);
-                        blockList_mutex.unlock();
+                        
                         pcb_exist_flag=0;
                     }
                 } else {
@@ -776,13 +774,13 @@ void cpu_worker(CPU& cpu) {
                 current_pcb->apply_time = 0;
             }
             if(pcb_exist_flag){
-                ready_list_mutex.lock();
+                std::lock_guard<std::mutex> lock(ready_list_mutex);
                 if(cpu.id==0) {
                     readyList0.push_back(*current_pcb);
                 } else {
                     readyList1.push_back(*current_pcb);
                 }
-                ready_list_mutex.unlock();
+                
             }
             
             cpu.busy = false;
