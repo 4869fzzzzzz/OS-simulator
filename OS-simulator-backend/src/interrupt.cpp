@@ -30,8 +30,8 @@ void Interrupt_Init(){ //中断初始化
 
     InterruptVector Timer(noHandle, static_cast<int>(InterruptType::TIMER));
     InterruptVectorTable[static_cast<int>(InterruptType::TIMER)]=Timer;
-    InterruptVector Device(noHandle, static_cast<int>(InterruptType::DEVICE));
-    InterruptVectorTable[static_cast<int>(InterruptType::DEVICE)]=Device;
+    InterruptVector mDevice(callDeviceInterrupt, static_cast<int>(InterruptType::DEVICE));
+    InterruptVectorTable[static_cast<int>(InterruptType::DEVICE)]=mDevice;
     InterruptVector Software(noHandle, static_cast<int>(InterruptType::SOFTWARE));
     InterruptVectorTable[static_cast<int>(InterruptType::SOFTWARE)]=Software;
     InterruptVector Snapshot(snapshotSend, static_cast<int>(InterruptType::SNAPSHOT));
@@ -216,7 +216,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
     CmdSplit(cmd,scmd);
     if(scmd.size()<2){
         raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
-        return false;
+        return true;
     }
     else{
         std::string cmdType=scmd[0];
@@ -251,23 +251,26 @@ bool RUN(std::string cmd, PCB* current_pcb){
         }else if(cmdType=="INPUT"){
             if(scmd.size()<3){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
-                return false;
+                return true;
             }else{
                //产生设备中断，后续补充
                 int devicetype=stoi(scmd[2]);
                 int needtime=stoi(scmd[3]);
-                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->block_time,needtime);
+                
+                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->start_block_time,needtime*10);
+                return false;
             }
 
         }else if(cmdType=="OUTPUT"){
             if(scmd.size()<3){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
-                return false;
+                return true;
             }else{
                 //产生设备中断，后续补充
                 int devicetype=stoi(scmd[2]);
                 int needtime=stoi(scmd[3]);
-                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->block_time,needtime);
+                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->start_block_time,needtime*10);
+                return false;
             }
 
         }else if(cmdType=="READFILE"){
@@ -299,41 +302,52 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
                 return true;
             }else{
-                int tpid=stoi(scmd[2]);
+                int tpid = stoi(scmd[2]);
+                PCB* found = nullptr;
+                bool isFound = false;
 
-                PCB found;
-                bool isFound = false; // 标记是否找到进程
-
-                // 查找并移除进程
-                for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
-                    if (it->pid == tpid) {
-                        found = *it;
-                        readyList0.erase(it);  // 从 readyList0 中移除
-                        isFound = true;
-                        break;
-                    }
-                }
-
-                if (!isFound) {
-                    for (auto it = readyList1.begin(); it != readyList1.end(); ++it) {
+                // 使用互斥锁保护就绪队列操作
+                ready_list_mutex.lock();
+                {
+                    // 先从 readyList0 查找
+                    for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
                         if (it->pid == tpid) {
-                            found = *it;
-                            readyList1.erase(it);  // 从 readyList1 中移除
+                            found = new PCB(*it); // 创建副本
+                            readyList0.erase(it);
                             isFound = true;
                             break;
                         }
                     }
-                }
 
-                if (isFound) {
-                    std::cout << "Process with PID " << tpid << " has been blocked." << std::endl;
-                    found.blocktype = SYSTEM;
-                    found.block_time = get_nowSysTime();
-                    block(&found);
+                    // 如果在readyList0中未找到，则查找readyList1
+                    if (!isFound) {
+                        for (auto it = readyList1.begin(); it != readyList1.end(); ++it) {
+                            if (it->pid == tpid) {
+                                found = new PCB(*it); // 创建副本
+                                readyList1.erase(it);
+                                isFound = true;
+                                break;
+                            }
+                        }
+                    }
                 }
-                else {
-                    std::cout << "Process does not exist or process can't be blocked." << std::endl;
-                    return false;
+                ready_list_mutex.unlock();
+
+                if (isFound && found != nullptr) {
+                    // 更新进程状态
+                    found->state = BLOCK;
+                    found->blocktype = SYSTEMB;
+                    found->start_block_time = time_cnt.load();
+                    
+                    // 使用互斥锁保护阻塞队列操作
+                    blockList_mutex.lock();
+                    blockList.push_back(*found);
+                    blockList_mutex.unlock();
+                    
+                    delete found; // 释放临时对象
+                    std::cout << "[INFO] Process " << tpid << " has been blocked successfully." << std::endl;
+                } else {
+                    std::cout << "[ERROR] Process " << tpid << " not found in ready queues." << std::endl;
                 }
                 return true;
             }
@@ -343,34 +357,62 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
                 return true;
             }else{
-                int tpid=stoi(scmd[2]);  
-
+                int tpid = stoi(scmd[2]);  
                 PCB found;
-                bool isFound = false; // 标记是否找到进程
+                bool isFound = false;
 
+                // 1. 先在阻塞队列中查找
+                blockList_mutex.lock();
                 for (auto it = blockList.begin(); it != blockList.end(); ++it) {
                     if (it->pid == tpid) {
                         found = *it;
-                        if (found.blocktype == SYSTEM)
-                            blockList.erase(it);
-                        else
-                            break;
+                        blockList.erase(it);
                         isFound = true;
+                        std::cout << "[INFO] Found process " << tpid << " in block list" << std::endl;
                         break;
+                    }
+                }
+                blockList_mutex.unlock();
+
+                // 2. 如果阻塞队列中未找到，则在挂起队列中查找
+                if (!isFound) {
+                    suspendList_mutex.lock();
+                    for (auto it = suspendList.begin(); it != suspendList.end(); ++it) {
+                        if (it->pid == tpid) {
+                            found = *it;
+                            suspendList.erase(it);
+                            isFound = true;
+                            std::cout << "[INFO] Found process " << tpid << " in suspend list" << std::endl;
+                            break;
+                        }
+                    }
+                    suspendList_mutex.unlock();
+                    
+                    // 如果是挂起进程，需要重新分配内存
+                    if (isFound) {
+                        if (page_in(found.address, found.pid)) {
+                            std::cout << "[INFO] Successfully allocated memory for process " << tpid << std::endl;
+                        } else {
+                            std::cout << "[ERROR] Failed to allocate memory for process " << tpid << std::endl;
+                            suspendList_mutex.lock();
+                            suspendList.push_back(found);
+                            suspendList_mutex.unlock();
+                            return true;
+                        }
                     }
                 }
 
                 if (isFound) {
-                    std::cout << "Process with PID " << tpid << " has been waked." << std::endl;
+                    // 更新进程状态并加入就绪队列
+                    found.state = READY;
                     found.blocktype = NOTBLOCK;
-                    found.block_time = 0;
-                    ready(&found);
+                    found.start_block_time = 0;
+                    ready(found);
+                    std::cout << "[INFO] Process " << tpid << " has been waked up successfully" << std::endl;
+                    return true;
+                } else {
+                    std::cout << "[ERROR] Process " << tpid << " not found in block or suspend list" << std::endl;
                 }
-                else {
-                    std::cout << "Process does not exist or process can't be awake." << std::endl;
-                    return false;
-                }
-
                 return true;
             }
         }else{
@@ -491,69 +533,143 @@ bool handleClientCmd(std::string cmd, std::string& result) {
 
     }else if(cmdType == "P"){
         //创建进程
-        LongTermScheduler(scmd[1], scmd[2]);
+        //LongTermScheduler(scmd[1], scmd[2]);
+       pPCB newProcess;
+       newProcess.path = scmd[1];
+       newProcess.filename = scmd[2];
+       prePCBList_mutex.lock();
+       prePCBList.push_back(newProcess);
+       prePCBList_mutex.unlock();
+       std::cout << "成功创建待创建进程" << newProcess.filename << std::endl;
 
-    }else if(cmdType == "B"){
-         // 阻塞进程
-         int pid = stoi(scmd[1]);
+    }// 在 handleClientCmd 函数中替换原有的 "B" 和 "K" 分支
+    else if(cmdType == "B"){
+        // 阻塞进程
+        if(scmd.size() < 2) {
+            std::cout << "Invalid command: " << cmdType << std::endl;
+            result = "Invalid command: Missing process ID";
+            return false;
+        }
+        int tpid = stoi(scmd[1]);
+        PCB* found = nullptr;
+        bool isFound = false;
 
-         PCB found;
-         bool isFound = false; // 标记是否找到进程
-  
-         // 查找并移除进程
-         for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
-             if (it->pid == pid) {
-                 found = *it;
-                 readyList0.erase(it);  // 从 readyList0 中移除
-                 isFound = true;
-                 break;
-             }
-         }
-  
-         if (!isFound) {
-             for (auto it = readyList1.begin(); it != readyList1.end(); ++it) {
-                 if (it->pid == pid) {
-                     found = *it;
-                     readyList1.erase(it);  // 从 readyList1 中移除
-                     isFound = true;
-                     break;
-                 }
-             }
-         }
-  
-            if (isFound) {
-                std::cout << "Process with PID " << pid << " has been blocked." << std::endl;
-                found.blocktype = USER;
-                found.block_time = get_nowSysTime();
-                block(&found);  
-            }
-            else {
-                std::cout << "Process does not exist or process can't be blocked." << std::endl;
+        // 使用互斥锁保护就绪队列操作
+        ready_list_mutex.lock();
+        {
+            // 先从 readyList0 查找
+            for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
+                if (it->pid == tpid) {
+                    found = new PCB(*it);
+                    readyList0.erase(it);
+                    isFound = true;
+                    break;
+                }
             }
 
-    }else if(cmdType == "K"){
-        //唤醒进程
-        int targetPid = std::stoi(scmd[1]);  // 获取目标pid（假设scmd[1]是一个字符串）
-        bool found = false;
+            // 如果在readyList0中未找到，则查找readyList1
+            if (!isFound) {
+                for (auto it = readyList1.begin(); it != readyList1.end(); ++it) {
+                    if (it->pid == tpid) {
+                        found = new PCB(*it);
+                        readyList1.erase(it);
+                        isFound = true;
+                        break;
+                    }
+                }
+            }
+        }
+        ready_list_mutex.unlock();
 
-        // 遍历阻塞队列，找到目标pid的进程
+        if (isFound && found != nullptr) {
+            // 更新进程状态
+            found->state = BLOCK;
+            found->blocktype = SYSTEMB;
+            found->start_block_time = time_cnt.load();
+            
+            // 使用互斥锁保护阻塞队列操作
+            blockList_mutex.lock();
+            blockList.push_back(*found);
+            blockList_mutex.unlock();
+            
+            delete found;
+            result = "[INFO] Process " + to_string(tpid) + " has been blocked successfully.";
+            std::cout << result << std::endl;
+            return true;
+        } else {
+            result = "[ERROR] Process " + to_string(tpid) + " not found in ready queues.";
+            std::cout << result << std::endl;
+            return false;
+        }
+    }
+    else if(cmdType == "K"){
+        // 唤醒进程
+        if(scmd.size() < 2) {
+            std::cout << "Invalid command: " << cmdType << std::endl;
+            result = "Invalid command: Missing process ID";
+            return false;
+        }
+        
+        int tpid = stoi(scmd[1]);
+        PCB found;
+        bool isFound = false;
+
+        // 先在阻塞队列中查找
+        blockList_mutex.lock();
         for (auto it = blockList.begin(); it != blockList.end(); ++it) {
-            PCB* process = *it;
-            if (process->pid == targetPid) {
-                // 找到了目标进程
-                blockList.erase(it);  // 从阻塞队列中移除该进程
-                process->block_time = 0;
-                ready(&process);
-                cout << "进程 " << process->pid << " 被唤醒" << endl;
-                found = true;
+            if (it->pid == tpid) {
+                found = *it;
+                blockList.erase(it);
+                isFound = true;
+                std::cout << "[INFO] Found process " << tpid << " in block list" << std::endl;
                 break;
             }
         }
+        blockList_mutex.unlock();
 
-        if (!found) {
-            cout << "未找到pid为 " << targetPid << " 的进程" << endl;
+        // 如果阻塞队列中未找到，则在挂起队列中查找
+        if (!isFound) {
+            suspendList_mutex.lock();
+            for (auto it = suspendList.begin(); it != suspendList.end(); ++it) {
+                if (it->pid == tpid) {
+                    found = *it;
+                    suspendList.erase(it);
+                    isFound = true;
+                    std::cout << "[INFO] Found process " << tpid << " in suspend list" << std::endl;
+                    break;
+                }
+            }
+            suspendList_mutex.unlock();
+            
+            // 如果是挂起进程，需要重新分配内存
+            if (isFound) {
+                if (page_in(found.address, found.pid)) {
+                    std::cout << "[INFO] Successfully allocated memory for process " << tpid << std::endl;
+                } else {
+                    std::cout << "[ERROR] Failed to allocate memory for process " << tpid << std::endl;
+                    suspendList_mutex.lock();
+                    suspendList.push_back(found);
+                    suspendList_mutex.unlock();
+                    result = "[ERROR] Failed to allocate memory for process " + to_string(tpid);
+                    return false;
+                }
+            }
         }
 
+        if (isFound) {
+            // 更新进程状态并加入就绪队列
+            found.state = READY;
+            found.blocktype = NOTBLOCK;
+            found.start_block_time = 0;
+            ready(found);
+            result = "[INFO] Process " + to_string(tpid) + " has been waked up successfully";
+            std::cout << result << std::endl;
+            return true;
+        } else {
+            result = "[ERROR] Process " + to_string(tpid) + " not found in block or suspend list";
+            std::cout << result << std::endl;
+            return false;
+        }
     }else if(cmdType == "E"){
         //退出系统
         exit(10);
@@ -570,20 +686,10 @@ void cpu_worker(CPU& cpu) {
     while (cpu.running) {
         PCB* current_pcb = nullptr;
         //短期调度
-        if (scheduel == SCHED_RRP) {
-            RRP_sche();
-        }
-        else if (scheduel == SCHED_RR) {
-
-        }
-        else if (scheduel == SCHED_PRO) {
-            pro_sche();
-        }
-
-        
+        shortScheduler();  
         // 获取就绪进程
+        ready_list_mutex.lock();
         {
-            std::lock_guard<std::mutex> lock(ready_list_mutex);
             if(cpu.id==0){
                 if (!readyList0.empty()) {
                     current_pcb = &readyList0.front();
@@ -600,32 +706,24 @@ void cpu_worker(CPU& cpu) {
                 }
             }
         }
+        ready_list_mutex.unlock();
+        int pcb_exist_flag=1;
         // 处理当前进程
         if (current_pcb != nullptr) {
             if (current_pcb->has_instruction()) {
                 if (current_pcb->current_instruction_time == 1) {
-                    // 执行指令
-                    //2025.5.11
-                    //下面这里的if逻辑有问题
-                    //设备函数要到中断才去处理，应该立即将进程阻塞
-                    /**old**if (RUN(current_pcb->get_current_instruction())) {
-                        //此处成功执行才会继续执行下一条指令
-                        //主要是为了设备申请指令能够重复申请，避免一次未成功申请就跳出的情况
-                        //只有设备申请失败会返回false以重新申请，其他指令执行失败会触发错误中断处理
-                        current_pcb->program.clear();
-                    } else {
-                        current_pcb->apply_time++;
-                        current_pcb->current_instruction_time = 1;
-                        if(current_pcb->apply_time>MAX_APPLY_TIME){
-                            //此处申请设备次数超过最大次数，处理逻辑待定
-                            
-                        }
-                    }*/
-
-                    RUN(current_pcb->get_current_instruction());
+                    if(!RUN(current_pcb->get_current_instruction(),current_pcb)){
+                        current_pcb->state=BLOCK;
+                        current_pcb->blocktype=DEVICEB;
+                        blockList_mutex.lock();
+                        blockList.push_back(*current_pcb);
+                        blockList_mutex.unlock();
+                        pcb_exist_flag=0;
+                    }
                 } else {
                     current_pcb->current_instruction_time--;
                 }
+        
             } else {
                 // 从内存读取指令
                 char instruction_buffer[256] = {0};
@@ -634,15 +732,15 @@ void cpu_worker(CPU& cpu) {
                     current_pcb->address, current_pcb->pid, &bytes_read);
                 if (bytes_read > 0) {
                     // 解析指令
-                    std::string instruction(instruction_buffer);
-                    current_pcb->program = instruction;
+                    std::string newinstruction(instruction_buffer);
+                    current_pcb->instruction = newinstruction;
         
                     // 更新程序计数器
                     current_pcb->address += bytes_read;
         
                     // 分析指令并分配时间片
                     std::vector<std::string> parts;
-                    CmdSplit(instruction, parts);
+                    CmdSplit(newinstruction, parts);
                     if (parts.size() >= 2) {
                         try {
                             current_pcb->current_instruction_time = std::stoi(parts[1]);
@@ -655,27 +753,26 @@ void cpu_worker(CPU& cpu) {
                 }
 
                 if (flag==0) {//未运行完，读取命令成功
-                    std::lock_guard<std::mutex> lock(ready_list_mutex);
                     //这里的逻辑已经实现了RR，短期调度只需要调整队列内部顺序即可
                     // 进程继续执行，重新加入就绪队列
-                    if(cpu.id==0) {
-                        readyList0.push_back(*current_pcb);
-                    } else {
-                        readyList1.push_back(*current_pcb);
-                    }
                 }else if (flag==-1){//缺页
                     raiseInterrupt(InterruptType::PAGEFAULT, current_pcb->pid,current_pcb->address,"",nullptr,0);
-                    if(cpu.id==0) {
-                        readyList0.push_back(*current_pcb);
-                    } else {
-                        readyList1.push_back(*current_pcb);
-                    }
                 }else{//进程已经运行完毕
                     // 释放当前进程资源
+                    pcb_exist_flag=0;
                     delete current_pcb;
                     current_pcb = nullptr;
                 }
                 current_pcb->apply_time = 0;
+            }
+            if(pcb_exist_flag){
+                ready_list_mutex.lock();
+                if(cpu.id==0) {
+                    readyList0.push_back(*current_pcb);
+                } else {
+                    readyList1.push_back(*current_pcb);
+                }
+                ready_list_mutex.unlock();
             }
             
             cpu.busy = false;

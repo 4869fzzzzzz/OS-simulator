@@ -46,11 +46,7 @@ struct Frame {
     Frame* next;     // 指向下一个页面，形成环形链表
 };
 
-//设备管理 暂定
-struct Device {
-    int device_id;          // 设备 ID
-    v_address buffer_address; // 设备的缓冲区地址
-};
+
 
 //内存管理数据
 extern PageTableItem page_table[PAGE_TABLE_SIZE]; // 页表
@@ -182,7 +178,7 @@ int page_in(v_address v_addr, m_pid pid);
  * @return 成功返回 0，失败返回 -1
  */
 int page_out(p_address p_addr, m_pid pid);
-
+int page_out(v_address v_addr, m_pid pid);
 /**
  * @brief 处理缺页中断
  * @param pid 进程ID

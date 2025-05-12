@@ -1,6 +1,6 @@
 #pragma once
-#include "headfile.h"
-#include "interrupt.h"
+#include "./headfile.h"
+#include "./interrupt.h"
 
 enum class DeviceType {
     Disk=0,
