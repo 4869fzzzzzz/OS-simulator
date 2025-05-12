@@ -1,28 +1,14 @@
 #pragma once
 
 
-#include "headfile.h"
-#include "./interrupt.h"
+#include "./headfile.h"
+#include "./socket.h"
+#include "./client.h"
+#include "./memory.h"
+#include "./device.h"
+#include "./filesystem.h"
 
-#include<stdio.h>
-#include<stdlib.h>
-#include<string>
-#include<math.h>
-#include<algorithm>
-#include<iostream>
-#include<fstream>
-#include<vector>
-#include<queue>
-#include<list>
-#include<map>
-#include<time.h>
-#include<sstream>
 using namespace std;
-//下面这里全都删掉
-typedef unsigned int v_address;
-typedef char atom_data;
-typedef int m_pid;
-#define FULL 5000000
 
 
 //进程状态
@@ -46,8 +32,7 @@ typedef int m_pid;
 #define MAX_APPLY_TIME 10
 
 
-#define SCHED_FCFS 0              
-#define SCHED_RR 1                
+#define SCHED_FCFS 0                         
 #define SCHED_PRO 2               
 #define SCHED_RRP 3
 
@@ -130,14 +115,8 @@ typedef struct process_struct {
 	string get_current_instruction(){
 		return instruction;
 	}
-	
 }PCB;
 
-typedef struct CPU {
-	bool isbusy;//程序计数器
-	int pid;//占用CPU的PCB
-	int schedule;//调度策略
-}CPU;
 
 typedef struct mutexInfo {
 	bool isBusy;

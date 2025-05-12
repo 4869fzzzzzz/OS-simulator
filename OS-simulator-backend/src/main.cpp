@@ -1,7 +1,7 @@
 #include "../include/headfile.h"
+#include "../include/process.h"
 #include "../include/interrupt.h"
 #include "../include/socket.h"
-#include "../include/process.h"
 #include "../include/memory.h"
 #include "../include/device.h"
 

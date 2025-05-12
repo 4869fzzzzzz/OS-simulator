@@ -3,7 +3,6 @@
 #include <string>
 #include <iostream>
 #include <sstream>
-#include "process.h"
 using namespace std;
 
 int pid_num = 1;
@@ -23,8 +22,7 @@ std::mutex blockList_mutex;
 list<PCB> waitForKeyBoardList;//等待键盘队列
 list<PCB> waitForPrintList;//等待打印机队列
 
-CPU cpu1;
-CPU cpu0;
+
 
 list<PCB> cpusche0; // CPU0 的调度队列
 list<PCB> cpusche1; // CPU1 的调度队列
@@ -35,7 +33,7 @@ list<pPCB> prePCBList; // 待创建PCB进程队列
 map<string, struct mutexInfo>fileMutex;
 
 // 占位实现 applyForResource
-void applyForResource(PCB& p) {
+/*void applyForResource(PCB& p) {
     p.address = alloc_for_process(p.pid, p.task_size);
     if (p.address != FULL) {  //代表内存分配成功，进入就绪队列
         ready(p);           //将进程p由创建状态转入就绪状态
@@ -45,45 +43,7 @@ void applyForResource(PCB& p) {
         suspend(p);
         MidTermScheduler(0,p);
     }
-}
-
-int applyForSuspend(PCB& p) {
-    // 尝试为挂起进程申请内存
-    p.address = alloc_for_process(p.pid, p.task_size);
-
-    if (p.address != FULL) {  // 如果内存分配成功
-        p.is_apply = true;    // 标记为内存分配成功
-        ready(p);             // 将进程从挂起状态转移到就绪状态
-        return 1;             // 返回1表示申请成功
-    }
-    else {
-        // 如果内存分配失败，则继续挂起进程
-        return 0;             // 返回0表示申请失败
-    }
-}
-
-v_address alloc_for_process(m_pid pid, int size) {
-    return 0;
-}
-
-
-vector<char> virtual_memory(1024 * 10);
-
-// read_memory 函数
-int read_memory(atom_data* data, v_address address, m_pid pid) {
-    // 每个进程的虚拟地址范围：(pid - 1) * 1024 到 pid * 1024 - 1
-    v_address base = (pid - 1) * 1024;
-    v_address limit = pid * 1024;
-
-    // 检查地址是否在有效范围内
-    if (address < base || address >= limit || address >= virtual_memory.size()) {
-        return -1; // 地址越界或无效
-    }
-
-    // 读取数据
-    *data = virtual_memory[address];
-    return 0; // 成功
-}
+}*/
 
 
 //以上为暂用
@@ -256,6 +216,7 @@ static mutexInfo& getFileMutex(const string& fullpath) {
     return it->second;
 }
 
+/*
 PCB* getRunningPCB(int cpu_num) {
     for (auto& pcb : PCBList) {
         if (pcb.pid == (cpu_num == 0 ? cpu0.pid : cpu1.pid) && pcb.state == RUNNING) {
@@ -263,7 +224,7 @@ PCB* getRunningPCB(int cpu_num) {
         }
     }
     return nullptr;
-}
+}*/
 
 void waitForFile(string filePath, string fileName) {
     int Timer = get_nowSysTime();
@@ -722,18 +683,4 @@ void shortScheduler() {
     ready_list_mutex.unlock();
 }
 
-
-void CPUScheduler(PCB& p, int cpu) {
-    p.cpu_num = cpu;         // 分配指定的 CPU
-    p.state = RUNNING;       // 设置进程状态为运行
-    p.cpuStartTime = Timer;  // 记录 CPU 开始时间
-    if (cpu == 0) {
-        cpu0.isbusy = true;
-        cpu0.pid = p.pid;
-    }
-    else {
-        cpu1.isbusy = true;
-        cpu1.pid = p.pid;
-    }
-}
 

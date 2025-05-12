@@ -7,23 +7,6 @@
 #include <chrono>   // std::chrono::seconds
 #include "../include/device.h"
 
-/*enum class InteruptType {
-    DeviceReady,
-    DeviceError,
-    IOCompleted,
-    Custom
-};
-
-void raiseInterupt(InteruptType t, int device_id, int value) {
-    std::cout << "[中断] 类型: ";
-    switch (t) {
-    case InteruptType::DeviceReady: std::cout << "DeviceReady"; break;
-    case InteruptType::DeviceError: std::cout << "DeviceError"; break;
-    case InteruptType::IOCompleted: std::cout << "IOCompleted"; break;
-    case InteruptType::Custom:      std::cout << "Custom"; break;
-    }
-    std::cout << ", 设备ID: " << device_id << ", 值: " << value << std::endl;
-}*/
 
 
 DeviceManager manager;

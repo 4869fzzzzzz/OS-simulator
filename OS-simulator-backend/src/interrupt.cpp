@@ -30,8 +30,8 @@ void Interrupt_Init(){ //中断初始化
 
     InterruptVector Timer(noHandle, static_cast<int>(InterruptType::TIMER));
     InterruptVectorTable[static_cast<int>(InterruptType::TIMER)]=Timer;
-    InterruptVector Device(noHandle, static_cast<int>(InterruptType::DEVICE));
-    InterruptVectorTable[static_cast<int>(InterruptType::DEVICE)]=Device;
+    InterruptVector mDevice(noHandle, static_cast<int>(InterruptType::DEVICE));
+    InterruptVectorTable[static_cast<int>(InterruptType::DEVICE)]=mDevice;
     InterruptVector Software(noHandle, static_cast<int>(InterruptType::SOFTWARE));
     InterruptVectorTable[static_cast<int>(InterruptType::SOFTWARE)]=Software;
     InterruptVector Snapshot(snapshotSend, static_cast<int>(InterruptType::SNAPSHOT));
