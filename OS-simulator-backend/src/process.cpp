@@ -1,4 +1,4 @@
-#include "../include/process.h"
+#include "./include/process.h"
 #include <list>
 #include <string>
 #include <iostream>
@@ -6,7 +6,7 @@
 using namespace std;
 
 int pid_num = 1;
-int Timer = get_nowSysTime();
+int Timer = time_cnt;
 // 定义全局变量
 list<PCB> PCBList;    // 总进程队列
 list<PCB> readyList0; // CPU0 的就绪队列
@@ -28,17 +28,7 @@ list<PCB> cpusche1; // CPU1 的调度队列
 map<string, struct mutexInfo>fileMutex;
 
 // 占位实现 applyForResource
-void applyForResource(PCB& p) {
-    p.address = alloc_for_process(p.pid, p.task_size);
-    if (p.address != FULL) {  //代表内存分配成功，进入就绪队列
-        ready(p);           //将进程p由创建状态转入就绪状态
-        p.is_apply = true;//成功分配内存
-    }
-    else {
-        suspend(p);
-        MidTermScheduler(0,p);
-    }
-}
+
 
 int applyForSuspend(PCB& p) {
     // 尝试为挂起进程申请内存
@@ -416,49 +406,7 @@ void wake_process(int time, int pid, PCB& p) {
 }
 
 
-// 就绪原语
-void ready(PCB& p) {
-    p.state = READY;
-    if (readyList0.size() <= readyList1.size()) {
-        readyList0.push_back(p);
-        p.cpu_num = 0;
-        cout << "进程 " << p.pid << " 加入 CPU0 就绪队列" << endl;
-    }
-    else {
-        readyList1.push_back(p);
-        p.cpu_num = 1;
-        cout << "进程 " << p.pid << " 加入 CPU1 就绪队列" << endl;
-    }
-}
 
-// 阻塞原语
-void block(PCB& p) {
-
-    p.state = BLOCK;
-    blockList.push_back(p);
-    cout << "进程 " << p.pid << " 被阻塞" << endl;
-}
-
-// 结束原语
-void stop(PCB& p) {
-    p.state = DEAD;
-    auto it = find(PCBList.begin(), PCBList.end(), p);
-    if (it != PCBList.end()) {
-        PCBList.erase(it);
-        cout << "进程 " << p.pid << " 从 PCBList 中移除" << endl;
-    }
-    free_process_memory(p.pid);
-    cout << "进程 " << p.pid << " 已终止" << endl;
-}
-
-// 挂起原语
-void suspend(PCB& p) {
-
-    p.state = SUSPEND;
-    p.suspend_time = Timer;      // 记录当前时间
-    suspendList.push_back(p);
-    cout << "进程 " << p.pid << " 被挂起" << endl;
-}
 
 void check_suspended_processes() {
     for (auto it = suspendList.begin(); it != suspendList.end(); ) {
@@ -520,9 +468,9 @@ ProcessInfo parseFileContent(const string& content) {
 
 
 // 创建PCB
-PCB create(const string& path, const string& filename, int M, int Y) {
+PCB create(const string& path, const string& filename, int M, int Y,int alltime) {
     PCB p;
-    p.pid = pid_num;           // 随机生成PID
+    p.pid = pid_num;          
     pid_num++;
     p.prority = Y;            // 设置优先级
     p.state = CREATING;       // 初始状态为创建
@@ -537,11 +485,12 @@ PCB create(const string& path, const string& filename, int M, int Y) {
     p.position = path + "/" + filename; // 保存完整文件路径
 
     p.cputime = 0;
+    p.servicetime = alltime;
     p.cpuStartTime = -1;
     p.keyboardStartTime = -1;
     p.printStartTime = -1;
     p.filewriteStartTime = -1;
-    p.createtime = Timer;
+    p.createtime = time_cnt;
     p.RR = 0;
 
     return p;
@@ -605,24 +554,6 @@ int read_instruction(string& instruction, m_pid pid) {
     }
 
     return 1; // 成功读取
-}
-// 长期调度程序
-void LongTermScheduler(string path, string filename) {
-    string content = readFile(path, filename);
-    if (content.empty()) {
-        cerr << "文件读取失败，调度终止" << endl;
-        return;
-    }
-
-    ProcessInfo info = parseFileContent(content);
-    if (info.M == -1 || info.Y == -1) {
-        cerr << "解析失败，调度终止" << endl;
-        return;
-    }
-
-    PCB p = create(path, filename, info.M, info.Y);
-    applyForResource(p);  // 在创建 PCB 后申请资源
-    PCBList.push_back(p);
 }
 
 void parse_and_execute(const string& instruction, PCB& p) {
@@ -1171,5 +1102,315 @@ void CPUScheduler(PCB& p, int cpu) {
         cpu1.isbusy = true;
         cpu1.pid = p.pid;
     }
+}
+
+double calculateResponseRatio(const PCB& p) {
+    // 响应比 = (等待时间 + 服务时间) / 服务时间
+    int waitTime = time_cnt - p.createtime; // 等待时间
+    int serviceTime = p.task_time; // 服务时间（假设是进程创建时指定的总执行时间）
+    
+    // 防止除以零
+    if (serviceTime == 0) {
+        return 1.0;
+    }
+    
+    return (double)(waitTime + serviceTime) / serviceTime;
+}
+
+void sortReadyListByPriority(list<PCB>& readyList) {
+    readyList.sort([](const PCB& a, const PCB& b) {
+        return a.prority > b.prority; // 优先级高的排在前面
+    });
+}
+
+void sortReadyListByResponseRatio(list<PCB>& readyList) {
+    readyList.sort([](const PCB& a, const PCB& b) {
+        return calculateResponseRatio(a) > calculateResponseRatio(b); // 响应比高的排在前面
+    });
+}
+
+// 就绪原语
+void ready(PCB& p) {
+    // 修改传入PCB的状态
+    p.state = READY;
+    
+    // 将进程添加到适当的就绪队列
+    if (readyList0.size() <= readyList1.size()) {
+        readyList0.push_back(p);
+        p.cpu_num = 0;
+        cout << "进程 " << p.pid << " 加入 CPU0 就绪队列" << endl;
+    }
+    else {
+        readyList1.push_back(p);
+        p.cpu_num = 1;
+        cout << "进程 " << p.pid << " 加入 CPU1 就绪队列" << endl;
+    }
+    
+    // 在PCB列表中找到相同的PCB并更新其状态
+    for (auto& pcb : PCBList) {
+        if (pcb.pid == p.pid) {
+            // 更新PCB列表中的PCB状态
+            pcb.state = p.state;
+            pcb.cpu_num = p.cpu_num;
+            break;
+        }
+    }
+}
+
+// 阻塞原语
+void block(PCB& p) {
+
+    p.state = BLOCK;
+    p.block_time = time_cnt;
+    blockList.push_back(p);
+    for (auto& pcb : PCBList) {
+        if (pcb.pid == p.pid) {
+            // 更新PCB列表中的PCB状态
+            pcb.state = p.state;
+            
+            break;
+        }
+    }
+    cout << "进程 " << p.pid << " 被阻塞" << endl;
+}
+
+// 结束原语
+void stop(PCB& p) {
+    p.state = DEAD;
+    auto it = find(PCBList.begin(), PCBList.end(), p);
+    if (it != PCBList.end()) {
+        PCBList.erase(it);
+        cout << "进程 " << p.pid << " 从 PCBList 中移除" << endl;
+    }
+    free_process_memory(p.pid);
+    cout << "进程 " << p.pid << " 已终止" << endl;
+}
+
+// 挂起原语
+void suspend(PCB& p) {
+
+    p.state = SUSPEND;
+    p.suspend_time = time_cnt;      // 记录当前时间
+    suspendList.push_back(p);
+    for (auto& pcb : PCBList) {
+        if (pcb.pid == p.pid) {
+            // 更新PCB列表中的PCB状态
+            pcb.state = p.state;
+            break;
+        }
+    }
+    cout << "进程 " << p.pid << " 被挂起" << endl;
+}
+
+// 创建PCB
+PCB create(const string& path, const string& filename, int M, int Y,int alltime) {
+    PCB p;
+    p.pid = pid_num;          
+    pid_num++;
+    p.prority = Y;            // 设置优先级
+    p.state = CREATING;       // 初始状态为创建
+    p.cpuState = 0;           // 默认特权状态
+    p.blocktype = NOTBLOCK;   // 未阻塞
+
+    p.cpu_num = -1;           // 未分配CPU
+    p.task_size = M;          // 设置内存块数
+    p.is_apply = false;       // 未分配内存
+    p.address = FULL;                // 虚拟地址待分配
+    p.next_v = 0;         // 读取位置初始化
+    p.position = path + "/" + filename; // 保存完整文件路径
+
+    p.cputime = 0;
+    p.servicetime = alltime;
+    p.cpuStartTime = -1;
+    p.deviceStartTime = -1;
+    p.createtime = time_cnt;
+    p.RR = 0;
+
+    return p;
+}
+
+void applyForResource(PCB& p) {
+    p.address = alloc_for_process(p.pid, p.task_size);
+    
+    if (p.address != FULL) {  //代表内存分配成功，进入就绪队列
+        std::lock_guard<std::mutex> lock(ready_list_mutex)
+        readyList0.lock;
+        readyList1.lock;
+        blockList.lock;
+
+        p.is_apply = true;//成功分配内存
+        ready(p);           //将进程p由创建状态转入就绪状态
+
+        readyList0.unlock;
+        readyList1.unlock;
+        blockList.unlock;
+    }
+    else {
+        suspend(p);
+    }
+
+}
+
+void LongTermScheduler() {
+    // 检查PCB列表是否已满或等待队列是否为空
+    if (PCBList.size() >= MAX_PCB_COUNT || waitingProcessList.empty()) {
+        // PCB列表已满或等待队列为空，直接返回
+        return;
+    }
+    
+    // PCB列表未满且等待队列不为空，取出等待队列中的第一个进程文件信息
+    WaitingProcess waitingProcess = waitingProcessList.front();
+    waitingProcessList.pop_front();
+    
+    // 使用文件模块提供的readFile函数获取文件内容
+    string programContent = readFile(waitingProcess.path, waitingProcess.fileName);
+    
+    if (programContent.empty()) {
+        cout << "无法读取文件: " << waitingProcess.path << "/" << waitingProcess.fileName << endl;
+        return;
+    }
+    
+    // 解析程序内容，计算总执行时间
+    int totalTime = calculateTotalExecutionTime(programContent);
+    
+    // 随机生成进程优先级 (0-20)
+    int priority = rand() % 21;
+    
+    // 使用文件内容大小作为进程大小
+    int processSize = programContent.size();
+    
+    // 创建新PCB
+    PCB newProcess = create(waitingProcess.path, waitingProcess.fileName, processSize, totalTime);
+
+    // 为进程申请内存资源
+    applyForResource(newProcess);
+    
+    // 将新进程添加到PCB列表
+    PCBList.push_back(newProcess);
+    
+    
+    // 递归调用自身，继续处理等待队列中的其他进程
+    LongTermScheduler();
+}
+
+int calculateTotalExecutionTime(const string& programContent) {
+    int totalTime = 0;
+    stringstream ss(programContent);
+    string line;
+    
+    // 逐行读取程序内容
+    while (getline(ss, line)) {
+        // 跳过空行
+        if (line.empty()) {
+            continue;
+        }
+        
+        // 解析指令
+        stringstream lineStream(line);
+        string instruction;
+        lineStream >> instruction;
+        
+        if (instruction == "CALCULATE") {
+            // 解析计算指令的时间
+            int time;
+            lineStream >> time;
+            totalTime += time;
+        } 
+        else if (instruction == "CREATEFILE" || instruction == "DELETEFILE" || 
+                 instruction == "INPUT" || instruction == "OUTPUT" || 
+                 instruction == "READFILE" || instruction == "WRIETFILE" || 
+                 instruction == "BLOCK" || instruction == "WAKE") {
+            // 除了CALCULATE之外的所有指令时间都为1
+            totalTime += 1;
+        }
+    }
+    
+    return totalTime;
+}
+
+void MidTermScheduler() {
+    // 第一步：为挂起队列中的进程尝试申请内存
+    auto suspendIt = suspendList.begin();
+    while (suspendIt != suspendList.end()) {
+        // 尝试为挂起进程申请内存
+        if (applyForSuspend(*suspendIt)) {
+            // 申请成功，从挂起队列移除
+            suspendIt = suspendList.erase(suspendIt);
+        } else {
+            // 申请失败，继续处理下一个进程
+            ++suspendIt;
+        }
+    }
+    
+    // 第二步：如果挂起队列不为空，则尝试释放长时间阻塞且未申请到设备的进程的内存
+    if (!suspendList.empty()) {
+        // 直接在函数中查找阻塞时间最长且未申请到设备的进程
+        auto longestBlockedIt = blockList.end();
+        int maxBlockTime = -1;
+        
+        for (auto it = blockList.begin(); it != blockList.end(); ++it) {
+            // 检查是否未申请到设备(deviceStartTime为-1)且已分配内存
+            if (it->deviceStartTime == -1 && it->is_apply) {
+                // 找出阻塞时间最长的进程
+                if (maxBlockTime == -1 || time_cnt - it->block_time > maxBlockTime) {
+                    maxBlockTime = time_cnt - it->block_time;
+                    longestBlockedIt = it;
+                }
+            }
+        }
+        
+        if (longestBlockedIt != blockList.end()) {
+            // 保存被阻塞进程的副本
+            PCB blockedProcess = *longestBlockedIt;
+            
+            // 释放该进程的内存
+            free_process_memory(blockedProcess.pid);
+            
+            // 使用互斥锁保护队列操作
+            std::lock_guard<std::mutex> lock(ready_list_mutex);
+            readyList0.lock();
+            readyList1.lock();
+            blockList.lock();
+            
+            // 从阻塞队列移除
+            blockList.erase(longestBlockedIt);
+            
+            readyList0.unlock();
+            readyList1.unlock();
+            blockList.unlock();
+            
+            // 将进程挂起
+            suspend(blockedProcess);
+        }
+    }
+}
+
+// 为挂起进程申请内存的函数
+bool applyForSuspend(PCB& p) {
+    // 已经申请到内存的进程不需要再申请
+    if (p.is_apply) {
+        return false;
+    }
+
+    // 尝试申请内存
+    p.address = alloc_for_process(p.pid, p.task_size);
+    
+    if (p.address != FULL) {  // 内存分配成功
+        std::lock_guard<std::mutex> lock(ready_list_mutex)
+        readyList0.lock;
+        readyList1.lock;
+        blockList.lock;
+
+        p.is_apply = true;  
+        ready(p);             // 将进程p由挂起状态转入就绪状态 
+        return true;          // 返回成功
+
+        readyList0.unlock;
+        readyList1.unlock;
+        blockList.unlock;
+    }
+
+    // 内存分配失败
+    return false;
 }
 
