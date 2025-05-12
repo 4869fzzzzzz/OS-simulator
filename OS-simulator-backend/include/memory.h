@@ -182,7 +182,7 @@ int page_in(v_address v_addr, m_pid pid);
  * @return 成功返回 0，失败返回 -1
  */
 int page_out(p_address p_addr, m_pid pid);
-
+int page_out(v_address v_addr, m_pid pid);
 /**
  * @brief 处理缺页中断
  * @param pid 进程ID

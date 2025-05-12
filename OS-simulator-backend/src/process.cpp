@@ -3,6 +3,7 @@
 #include <string>
 #include <iostream>
 #include <sstream>
+#include "process.h"
 using namespace std;
 
 int pid_num = 1;
@@ -14,7 +15,10 @@ list<PCB> readyList1; // CPU1 的就绪队列
 list<PCB> blockList; //阻塞队列
 list<PCB> suspendList; //挂起队列
 
+std::mutex prePCBList_mutex;
+std::mutex suspendList_mutex;
 std::mutex ready_list_mutex;
+std::mutex blockList_mutex;
 
 list<PCB> waitForKeyBoardList;//等待键盘队列
 list<PCB> waitForPrintList;//等待打印机队列
@@ -24,6 +28,9 @@ CPU cpu0;
 
 list<PCB> cpusche0; // CPU0 的调度队列
 list<PCB> cpusche1; // CPU1 的调度队列
+
+list<pPCB> prePCBList; // 待创建PCB进程队列
+
 
 map<string, struct mutexInfo>fileMutex;
 
@@ -78,27 +85,7 @@ int read_memory(atom_data* data, v_address address, m_pid pid) {
     return 0; // 成功
 }
 
-// 文件系统提供的函数
-string readFile(string path, string filename) {
-    return "M=5\nY=3\nstart\nprocess data\nend";
-}
 
-void free_process_memory(int pid) {
-
-}
-
-int createFile(string path, string filename, int fileType, int size) {
-
-}
-int deleteFile(string path, string filename) {
-
-}
-int DeviceControl() {
-    return 0;
-}
-int writeFile(string path, string filename, string data) {
-    return 0;
-}
 //以上为暂用
 
 void removePCBFromQueue(PCB* current_pcb) {
@@ -109,10 +96,11 @@ void removePCBFromQueue(PCB* current_pcb) {
     }
 
     // 根据状态执行不同的操作
-    switch (current_pcb->status) {
+    switch (current_pcb->state) {
     case READY:
     {
         // 查找并从对应队列中移除
+        ready_list_mutex.lock();
         if (current_pcb->pid != -1) { // 如果pid不为-1（表示有效进程）
             auto it = std::find_if(readyList0.begin(), readyList0.end(),
                 [current_pcb](PCB& p) { return p.pid == current_pcb->pid; });
@@ -131,6 +119,7 @@ void removePCBFromQueue(PCB* current_pcb) {
                 return;
             }
         }
+        ready_list_mutex.unlock();
         break;
     }
     case BLOCK:
@@ -163,14 +152,14 @@ void removePCBFromQueue(PCB* current_pcb) {
 
 void pro_sche() {
     auto compareByPriorityDesc = [](const PCB& a, const PCB& b) {
-        return a.prority > b.prority;
+        return a.priority > b.priority;
         };
 
     readyList0.sort(compareByPriorityDesc);
     readyList1.sort(compareByPriorityDesc);
 }
-void updateRRAndSortByRR(list<PCB>& readyList) {
-    int now = get_nowSysTime();  // 获取当前系统时间
+void updateRRAndSortByRR(list<PCB>& readyList) {//有用
+    int now = time_cnt.load();  // 获取当前系统时间
 
     // 更新每个 PCB 的响应比
     for (auto& pcb : readyList) {
@@ -179,7 +168,7 @@ void updateRRAndSortByRR(list<PCB>& readyList) {
             pcb.RR = 1.0;
         }
         else {
-            pcb.RR = static_cast<double>(now - pcb.createtime) / serviceTime;
+            pcb.RR = static_cast<double>(now - pcb.createtime+serviceTime) / serviceTime;
         }
     }
 
@@ -294,7 +283,7 @@ void waitForFile(string filePath, string fileName) {
         }
     }
 }
-
+/*
 void waitForKeyBoard() {
     //检查当前的wait队列 看是否有进程正在等待或占用键盘
     int Timer = get_nowSysTime();
@@ -310,8 +299,8 @@ void waitForKeyBoard() {
             }
         }
     }
-}
-
+}*/
+/*
 void waitForPrint() {
     //检查当前的wait队列 看是否有进程正在等待或占用键盘
     int Timer = get_nowSysTime();
@@ -327,98 +316,13 @@ void waitForPrint() {
         }
     }
 }
-
-void create_file(int time, const string& directory, const string& filename, PCB& p) {
-    if (createFile(directory, filename, 0, 1) != -1) {
-        p.block_time = Timer;
-        p.blocktype = OTHER;
-        block(p);
-    }
-    else {
-        cout << "进程" << p.pid << "创建文件失败";
-    }
-}
-void delete_file(int time, const string& directory, const string& filename, PCB& p) {
-    if (deleteFile(directory, filename) != -1) {
-        p.block_time = Timer;
-        p.blocktype = OTHER;
-        block(p);
-    }
-    else {
-        cout << "进程" << p.pid << "删除文件失败";
-    }
-}
-
-void input_from_device(int time, const string& device_type, PCB& p) {
-    p.block_time = Timer;
-    p.blocktype = KEYBOARD;
-    block(p);
-    waitForKeyBoardList.push_back(p);
-    waitForKeyBoard();
-}
-void output_to_device(int time, const string& device_type, PCB& p) {
-    p.block_time = Timer;
-    p.blocktype = PRINT;
-    block(p);
-    waitForPrintList.push_back(p);
-    waitForPrint();
-}
-void read_file(int time, const string& directory, const string& filename, int line, PCB& p) {
-
-    string fullpath = directory + "/" + filename;
-
-
-    mutexInfo& m = getFileMutex(fullpath);
-
-    m.waitForFileList.push_back(p);
-    p.fsState = "r";
-    p.fs = fullpath;
-    p.block_time = Timer;
-    p.blocktype = FILEB;
-    block(p);
-    waitForFile(directory, filename);
-}
-void read_file(int time, const string& directory, const string& filename, PCB& p) {
-    string fullpath = directory + "/" + filename;
-
-
-    mutexInfo& m = getFileMutex(fullpath);
-
-    m.waitForFileList.push_back(p);
-
-    p.block_time = Timer;
-    p.blocktype = FILEB;
-    block(p);
-    waitForFile(directory, filename);
-}
-void write_file(int time, const string& directory, const string& filename, const string& content, PCB& p) {
-    string fullpath = directory + "/" + filename;
-
-
-    mutexInfo& m = getFileMutex(fullpath);
-
-    m.waitForFileList.push_back(p);
-
-    p.block_time = Timer;
-    p.blocktype = FILEB;
-    block(p);
-    p.content = content;
-    waitForFile(directory, filename);
-}
-void block_process(int time, int pid, PCB& p) {
-    p.block_time = Timer;
-    p.blocktype = SYSTEM;
-    block(p);
-}
-void wake_process(int time, int pid, PCB& p) {
-    p.blocktype = NOTBLOCK;
-    ready(p);
-}
-
+*/
 
 // 就绪原语
 void ready(PCB& p) {
     p.state = READY;
+
+    ready_list_mutex.lock();
     if (readyList0.size() <= readyList1.size()) {
         readyList0.push_back(p);
         p.cpu_num = 0;
@@ -429,17 +333,38 @@ void ready(PCB& p) {
         p.cpu_num = 1;
         cout << "进程 " << p.pid << " 加入 CPU1 就绪队列" << endl;
     }
+    ready_list_mutex.unlock();
 }
 
 // 阻塞原语
 void block(PCB& p) {
 
     p.state = BLOCK;
+    blockList_mutex.lock();
     blockList.push_back(p);
+    blockList_mutex.unlock();
+    // 从就绪队列中移除
+    ready_list_mutex.lock();
+    for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
+        if (it->pid == p.pid) {
+            readyList0.erase(it);
+            cout << "进程 " << p.pid << " 从 CPU0 就绪队列中移除" << endl;
+            break;
+        }
+    }
+    for (auto it = readyList1.begin(); it != readyList1.end(); ++it) {
+        if (it->pid == p.pid) {
+            readyList1.erase(it);
+            cout << "进程 " << p.pid << " 从 CPU1 就绪队列中移除" << endl;
+            break;
+        }
+    }
+    ready_list_mutex.unlock();
+    
     cout << "进程 " << p.pid << " 被阻塞" << endl;
 }
 
-// 结束原语
+// 暂停原语
 void stop(PCB& p) {
     p.state = DEAD;
     auto it = find(PCBList.begin(), PCBList.end(), p);
@@ -456,10 +381,14 @@ void suspend(PCB& p) {
 
     p.state = SUSPEND;
     p.suspend_time = Timer;      // 记录当前时间
+    
+    suspendList_mutex.lock();
     suspendList.push_back(p);
+    suspendList_mutex.unlock();
     cout << "进程 " << p.pid << " 被挂起" << endl;
 }
 
+/*
 void check_suspended_processes() {
     for (auto it = suspendList.begin(); it != suspendList.end(); ) {
         PCB& p = *it;
@@ -474,7 +403,7 @@ void check_suspended_processes() {
             ++it;  // 移动到下一个进程
         }
     }
-}
+}*/
 
 
 // 定义解析结果结构体
@@ -520,17 +449,19 @@ ProcessInfo parseFileContent(const string& content) {
 
 
 // 创建PCB
-PCB create(const string& path, const string& filename, int M, int Y) {
+PCB create(const string& path, const string& filename) {
     PCB p;
     p.pid = pid_num;           // 随机生成PID
     pid_num++;
-    p.prority = Y;            // 设置优先级
+    p.priority = rand() % 10;            // 设置优先级
     p.state = CREATING;       // 初始状态为创建
     p.cpuState = 0;           // 默认特权状态
     p.blocktype = NOTBLOCK;   // 未阻塞
 
+    std::string content = fs.readFile(path, filename);
+
     p.cpu_num = -1;           // 未分配CPU
-    p.task_size = M;          // 设置内存块数
+    p.task_size = content.size();          // 设置内存块数
     p.is_apply = false;       // 未分配内存
     p.address = FULL;                // 虚拟地址待分配
     p.next_v = 0;         // 读取位置初始化
@@ -606,556 +537,189 @@ int read_instruction(string& instruction, m_pid pid) {
 
     return 1; // 成功读取
 }
-// 长期调度程序
-void LongTermScheduler(string path, string filename) {
-    string content = readFile(path, filename);
-    if (content.empty()) {
-        cerr << "文件读取失败，调度终止" << endl;
-        return;
-    }
 
-    ProcessInfo info = parseFileContent(content);
-    if (info.M == -1 || info.Y == -1) {
-        cerr << "解析失败，调度终止" << endl;
-        return;
-    }
-
-    PCB p = create(path, filename, info.M, info.Y);
-    applyForResource(p);  // 在创建 PCB 后申请资源
-    PCBList.push_back(p);
-}
-
-void parse_and_execute(const string& instruction, PCB& p) {
-    // 将指令分割为 tokens
-    istringstream iss(instruction);
-    vector<string> tokens;
-    string token;
-    while (iss >> token) {
-        tokens.push_back(token);
-    }
-
-    // 检查是否为空指令
-    if (tokens.empty()) {
-        cout << "空指令" << endl;
-        return;
-    }
-
-    // 提取命令
-    string command = tokens[0];
-
-    // 根据命令类型解析和执行
-    if (command == "CREATEFILE" || command == "DELETEFILE") {
-        int time = 1; // 默认时间为 1
-        size_t idx = 1;
-        // 检查时间是否提供
-        if (tokens.size() >= 2 && isdigit(tokens[1][0])) {
-            time = stoi(tokens[1]);
-            idx = 2;
-        }
-        // 验证参数数量
-        if (tokens.size() < idx + 2) {
-            cout << command << " 参数不足" << endl;
-            return;
-        }
-        string directory = tokens[idx];
-        string filename = tokens[idx + 1];
-        if (command == "CREATEFILE") {
-            p.block_time = get_nowSysTime();
-            p.blocktype = OTHER;
-            block(p);
-        }
-        else {
-            p.block_time = get_nowSysTime();
-            p.blocktype = OTHER;
-            block(p);
-        }
-    }
-    else if (command == "CALCULATE") {
-        if (tokens.size() < 2) {
-            cout << "CALCULATE 参数不足" << endl;
-            return;
-        }
-        int time = stoi(tokens[1]);
-        ready(p);
-    }
-    else if (command == "INPUT") {
-        if (tokens.size() < 3) {
-            cout << "INPUT 参数不足" << endl;
-            return;
-        }
-        int time = stoi(tokens[1]);
-        string device_type = tokens[2];
-        p.block_time = get_nowSysTime();
-        p.blocktype = KEYBOARD;
-        block(p);
-        waitForKeyBoardList.push_back(p);
-        waitForKeyBoard();
-    }
-    else if (command == "OUTPUT") {
-        if (tokens.size() < 3) {
-            cout << "OUTPUT 参数不足" << endl;
-            return;
-        }
-        int time = stoi(tokens[1]);
-        string device_type = tokens[2];
-        p.block_time = get_nowSysTime();
-        p.blocktype = PRINT;
-        block(p);
-        waitForPrintList.push_back(p);
-        waitForPrint();
-    }
-    else if (command == "READFILE") {
-        if (tokens.size() < 4) {
-            cout << "READFILE 参数不足" << endl;
-            return;
-        }
-        int time = stoi(tokens[1]);
-        string directory = tokens[2];
-        string filename = tokens[3];
-        if (tokens.size() == 5) {
-            int line = stoi(tokens[4]);
-            read_file(time, directory, filename, line, p);
-        }
-        else {
-            read_file(time, directory, filename, p);
-        }
-    }
-    else if (command == "WRITEFILE") {
-        if (tokens.size() < 4) {
-            cout << "WRITEFILE 参数不足" << endl;
-            return;
-        }
-        int time = stoi(tokens[1]);
-        string directory = tokens[2];
-        string filename = tokens[3];
-        // 将剩余部分作为内容
-        string content;
-        for (size_t i = 4; i < tokens.size(); ++i) {
-            if (i > 4) content += " ";
-            content += tokens[i];
-        }
-        write_file(time, directory, filename, content, p);
-    }
-    else if (command == "BLOCK") {
-        if (tokens.size() < 3) {
-            cout << "BLOCK 参数不足" << endl;
-            return;
-        }
-        int time = stoi(tokens[1]);
-        int pid = stoi(tokens[2]);
-        
-    }
-    else if (command == "WAKE") {
-        if (tokens.size() < 3) {
-            cout << "WAKE 参数不足" << endl;
-            return;
-        }
-        int time = stoi(tokens[1]);
-        int pid = stoi(tokens[2]);
-
-        if (p.blocktype != SYSTEM) return;
-
-        wake_process(time, pid, p);
-    }
-    else {
-        cout << "未知命令: " << command << endl;
+void CreatePCB()
+{
+    while(!prePCBList.empty()&&PCBList.size() < MAX_PCB_SIZE&&suspendList.size() < MAX_SPCB_SIZE){
+        prePCBList_mutex.lock();
+        //创建pcb
+        PCB newProcess = create(prePCBList.front().path, prePCBList.front().filename);
+        //分配虚拟地址空间
+        alloc_for_process(newProcess.pid, newProcess.task_size);
+        PCBList.push_back(newProcess);
+        suspendList_mutex.lock();
+        suspendList.push_back(newProcess);
+        suspendList_mutex.unlock();
+        prePCBList.pop_front();
+        prePCBList_mutex.unlock();
     }
 }
-void execute() {
-    // 遍历两个 CPU
-    for (int cpu = 0; cpu < 2; ++cpu) {
-        list<PCB>& readyList = (cpu == 0) ? readyList0 : readyList1;
-
-        // 检查就绪队列是否非空
-        if (!readyList.empty()) {
-            // 遍历就绪队列中的每个 PCB
-            for (auto& p : readyList) {
-                // 检查 program 是否为空
-                readyList.pop_front(); // 从队列中移除
-                if (!p.program.empty()) {
-
-
-                    // 使用 program 中的指令进行解析和执行
-                    parse_and_execute(p.program, p);
-                }
-            }
-        }
-    }
-}
-
-void updateTaskState() {
-    int Timer = get_nowSysTime();
-    if (!waitForKeyBoardList.empty()) {
-        PCB& p = waitForKeyBoardList.front();
-        // 1. 解析 "INPUT <time> <device>"
-        string cmd = p.program;
-        stringstream ss(cmd);
-        string op, devType, tstr;
-        ss >> op >> tstr >> devType;          // op == "INPUT"
-
-        // 2. 仅处理键盘设备
-        if (devType == "KEYBOARD") {
-            long serviceTime = stol(tstr);    // 转成数值
-            long elapsed = Timer - p.keyboardStartTime;
-
-            // 3. 日志输出
-            cout << "pid=" << p.pid
-                << " waited=" << elapsed
-                << " needed=" << serviceTime
-                << endl;
-
-            // 4. 时间到，触发中断
-            if (elapsed >= serviceTime-1) {
-                p.blocktype = NOTBLOCK;
-                p.program.clear();
+void AllocateMemoryForPCB()
+{
+    while (!suspendList.empty()) {
+        suspendList_mutex.lock();
+        PCB& p = suspendList.front();
+        suspendList.pop_front();
+        if(p.state==CREATING){
+            if(page_in(p.address,p.pid)){
+                std::cout << "进程 " << p.pid << " 分配内存成功" << std::endl;
+                p.state = READY;
                 ready(p);
-                for (list<PCB>::iterator i = blockList.begin(); i != blockList.end();) {
-                    if (i->pid == p.pid) {
-                        blockList.erase(i++);
-                    }
-                    else {
-                        i++;
-                    }
-                }
-                waitForKeyBoardList.pop_front();
-                for (list<PCB>::iterator it = PCBList.begin(); it != PCBList.end(); ++it) {
-                    if (it->pid == p.pid) {
-                        it->clear();
-                    }
-                }
-                DeviceControl();//释放设备
-                waitForKeyBoard();
+            }
+            else{
+                std::cout << "进程 " << p.pid << " 分配内存失败" << std::endl;
+                suspendList.push_back(p);
             }
         }
+        suspendList_mutex.unlock();
     }
+}
 
-    if (!waitForPrintList.empty()) {
-        PCB& p = waitForPrintList.front();
-        // 1. 解析 "OUTPUT <time> <device>"
-        string cmd = p.program;
-        stringstream ss(cmd);
-        string op, devType, tstr;
-        ss >> op >> tstr >> devType;          // op == "OUTPUT"
+void CheckBlockList()
+{
+    //阻塞队列的操作有下面几类
+    //1.检查阻塞类型为设备，检查其是否已成功申请到设备，
+    //start_block_time为0表示正在申请忽略，
+    //大于0表示已经开始使用计算当前时间减去start_block_time是否大于need_block_time,大于则表示已经使用结束，清除当前进程的指令和指令时间等，恢复到就绪队列，小于则忽略
+    //小于0表示申请失败，apply_time+1,检查applytime是否超过上限，超过直接挂起进程，不超过则返回就绪队列重新申请
+    
+    blockList_mutex.lock();
+    for (auto it = blockList.begin(); it != blockList.end();) {
+        PCB& p = *it;
+        bool processed = false;
 
-        // 2. 仅处理打印设备
-        if (devType == "PRINTER") {
-            long serviceTime = stol(tstr);    // 转成数值
-            long elapsed = Timer - p.printStartTime;
-
-            // 3. 日志输出
-            cout << "pid=" << p.pid
-                << " waited=" << elapsed
-                << " needed=" << serviceTime
-                << endl;
-
-            // 4. 时间到，触发中断
-            if (elapsed >= serviceTime-1) {
-                p.blocktype = NOTBLOCK;
-                p.program.clear();
-                ready(p);
-                for (list<PCB>::iterator i = blockList.begin(); i != blockList.end();) {
-                    if (i->pid == p.pid) {
-                        blockList.erase(i++);
-                    }
-                    else {
-                        i++;
-                    }
-                }
-                waitForPrintList.pop_front();
-                for (list<PCB>::iterator it = PCBList.begin(); it != PCBList.end(); ++it) {
-                    if (it->pid == p.pid) {
-                        it->clear();
-                    }
-                }
-                DeviceControl();
-                waitForPrint();
-            }
-        }
-    }
-
-
-
-    if (!suspendList.empty()) {
-        for (auto it = suspendList.begin(); it != suspendList.end(); /*++it 在循环末尾*/) {
-            PCB& p = *it;
-            long elapsed = Timer - p.suspend_time;
-
-            // 日志输出
-            cout << "pid=" << p.pid
-                << " suspended=" << elapsed
-                << " threshold=" << MAX_SUSPEND_TIME
-                << endl;
-
-            if (elapsed >= MAX_SUSPEND_TIME) {
-                // 触发强制停止
-                stop(p);
-
-                // 从 suspendList 中移除
-                it = suspendList.erase(it);
+        // 检查设备类型阻塞
+        if (p.blocktype == DEVICEB) {
+            // 检查设备申请状态
+            if (p.start_block_time == 0) {
+                // 正在申请设备，暂时跳过
+                ++it;
                 continue;
-            }
-            ++it;
-        }
-
-
-    }
-    if (!blockList.empty()) {
-        for (auto it = blockList.begin(); it != blockList.end(); /*++it 在下面*/) {
-            PCB& p = *it;
-            long elapsed = Timer - p.block_time;
-
-            // 1. 超时强制停止
-            if (elapsed >= MAX_BLOCK_TIME) {
-                cout << "pid=" << p.pid
-                    << " blockedTooLong=" << elapsed
-                    << " > MAX_BLOCK_TIME=" << MAX_BLOCK_TIME
-                    << endl;
-                stop(p);
-                it = blockList.erase(it);
-                continue;
-            }
-
-            // 2. SYSTEM / OTHER 类型按指令时间解阻
-            if (p.blocktype == SYSTEM || p.blocktype == OTHER) {
-                // 解析指令
-                string op, tstr, arg1, arg2;
-                stringstream ss(p.program);
-                ss >> op >> tstr;  // 读取操作符和时间
-
-                // 默认时间为1
-                long serviceTime = 1;
-                if (!tstr.empty()) {
-                    try {
-                        serviceTime = stol(tstr);  // 将时间参数转换为数字
-                    }
-                    catch (const std::invalid_argument& e) {
-                        cout << "Invalid time format for PID " << p.pid << endl;
-                    }
-                }
-
-                // 如果存在其他参数，继续读取目录和文件名
-                ss >> arg1 >> arg2;
-
-                cout << "pid=" << p.pid
-                    << " op=" << op
-                    << " elapsed=" << elapsed
-                    << " need=" << serviceTime
-                    << endl;
-
-                if (elapsed >= serviceTime-1) {
-                    // 解除阻塞：置就绪，移入 readyQueue，清空当前指令
+            } 
+            else if (p.start_block_time > 0) {
+                // 已获得设备，检查使用时间
+                int current_time = time_cnt.load();
+                int used_time = current_time - p.start_block_time;
+                
+                if (used_time >= p.need_block_time) {
+                    // 设备使用完成
+                    p.state = READY;
+                    p.blocktype = NOTBLOCK;
+                    p.start_block_time = 0;
+                    p.need_block_time = 0;
+                    
+                    // 从阻塞队列移除
+                    it = blockList.erase(it);
+                    
+                    // 加入就绪队列
                     ready(p);
-                    p.program.clear();
+                    processed = true;
+                    
+                    std::cout << "[INFO] Process " << p.pid 
+                              << " finished using device and moved to ready queue" << std::endl;
+                }
+            } 
+            else {
+                // 申请失败的情况 (start_block_time < 0)
+                p.apply_time++;
+                if (p.apply_time >= MAX_APPLY_TIME) {
+                    // 超过最大申请次数，挂起进程
+                    p.state = SUSPEND;
+                    it = blockList.erase(it);
+                    suspend(p);
+                    processed = true;
+                    
+                    std::cout << "[INFO] Process " << p.pid 
+                              << " exceeded max apply attempts, suspended" << std::endl;
+                } 
+                else {
+                    // 未超过最大申请次数，重新加入就绪队列
+                    p.state = READY;
                     p.blocktype = NOTBLOCK;
                     it = blockList.erase(it);
-                    continue;
+                    ready(p);
+                    processed = true;
+                    
+                    std::cout << "[INFO] Process " << p.pid 
+                              << " failed to get device, returning to ready queue" << std::endl;
                 }
             }
+        }
 
+        // 如果没有处理过当前进程，移动到下一个
+        if (!processed) {
             ++it;
         }
     }
-
-    map<string, struct mutexInfo>::iterator it;
-    for (auto it = fileMutex.begin(); it != fileMutex.end(); ++it) {
-        if (!it->second.isBusy) continue;
-
-        PCB& writeP = it->second.waitForFileList.front();
-        const string& instr = writeP.program;  // e.g. "READFILE 5 /dir file.txt 10"
-
-
-        istringstream ss(instr);
-        string cmd, timeStr, directory, filename;
-        if (!(ss >> cmd >> timeStr >> directory >> filename)) {
-            cerr << "无法解析指令前四项: " << instr << endl;
-            continue;
-        }
-
-
-        int instrTime = stoi(timeStr);
-
-        if (cmd == "READFILE") {
-
-            int line = -1;
-
-            if (Timer - writeP.filewriteStartTime >= instrTime) {
-                
-                for (auto it = blockList.begin(); it != blockList.end(); it++) {
-                    PCB& p = *it;
-                    if (p.pid == writeP.pid) {
-                        ready(p);
-                        p.program.clear();
-                        it = blockList.erase(it);
-                        p.blocktype = NOTBLOCK;
-                        break;
-                    }
-
-                }
+    blockList_mutex.unlock();
+}
+void MidStageScheduler()
+{
+    //根据阻塞类型，将部分手动阻塞的进程换出
+    //进程状态---阻塞->挂起
+    while(!blockList.empty()){
+        blockList_mutex.lock();
+        PCB& p = blockList.front();
+        blockList.pop_front();
+        if(p.blocktype==SYSTEMB){
+            if(page_out(p.address,p.pid)){
+                p.state = SUSPEND;
+                suspend(p);
+                cout << "进程 " << p.pid << " 被挂起" << endl;
+            }
+            else{
+                blockList.push_back(p);
             }
         }
-        else if (cmd == "WRITEFILE") {
-
-            string content;
-
-            getline(ss, content);
-
-            if (!content.empty() && content[0] == ' ')
-                content.erase(0, 1);
-
-            // 计算是否完成
-            if (Timer - writeP.filewriteStartTime >= instrTime) {
-                
-                for (auto it = blockList.begin(); it != blockList.end(); it++) {
-                    PCB& p = *it;
-                    if (p.pid == writeP.pid) {
-                        ready(p);
-                        p.program.clear();
-                        it = blockList.erase(it);
-                        p.blocktype = NOTBLOCK;
-                        break;
-                    }
-
-                }
-            }
+        else{
+            blockList.push_back(p);
         }
-        else {
-            cerr << "未知指令类型: " << cmd << endl;
-        }
+        blockList_mutex.unlock();
     }
-
-    for (list<PCB>::iterator it = PCBList.begin(); it != PCBList.end(); ++it) {
-        if (it->state == RUNNING) {
-            it->cputime = Timer - it->cpuStartTime;
-            
-        }
-    }
-    
-    MidTermScheduler(1, nullptr);
-
 }
 
-void MidTermScheduler(int inOrOut, PCB* p) {
-    int Timer = get_nowSysTime();
-    if (inOrOut == 0) {//OUT
-        int size = 0;
-        for (int i = 0; i < blockList.size(); ++i) {
-            pair<int, int> pcbPair = { INT_MAX, -1 };
-            for (list<PCB>::iterator it = blockList.begin(); it != blockList.end(); ++it) {
-                if (it->prority < pcbPair.first && it->is_apply) {//优先调出优先级低的进程
-                    pcbPair.first = it->prority;
-                    pcbPair.second = it->pid;
-                }
-            }
-            if(p.prority < pcbPair.first){
-                return;
-            }
+void shortScheduler() {
+    ready_list_mutex.lock();
 
-            if (pcbPair.second != -1) {
-                for (list<PCB>::iterator it = blockList.begin(); it != blockList.end(); ++it) {
-                    if (it->pid == pcbPair.second) {
-                        size += it->task_size;
-                        it->is_apply = false;
-                        PCB& p = *it;
-
-                        if (Under_Keyboard(p)) {
-                            Keyboard_delete(p);
-                            cout << "pid=" << p.pid << " wTime " << p.keyboardStartTime << endl;
-
-                            if (p.keyboardStartTime != -1) {
-                                // 按 “操作码 时间 设备” 拆分
-                                istringstream iss(p.program);
-                                string op, dev;
-                                int origTime;
-                                iss >> op >> origTime >> dev;
-
-                                if (op == "INPUT") {
-                                    // 计算已执行时间和剩余时间
-                                    int elapsed = Timer - p.keyboardStartTime;
-                                    int remTime = origTime - elapsed;
-                                    cout << "keyTime=" << remTime << endl;
-
-                                    if (remTime > 0) {
-                                        // 还有剩余，更新 p.program
-                                        p.program = op + " " + to_string(remTime) + " " + dev;
-                                    }
-                                    else {
-                                        // 时间耗尽，清空指令或切换下一步
-                                        p.program.clear();
-                                    }
-                                }
-                            }
-                        }
-                        if (Under_Print(p)) {
-                            Print_delete(p);
-                            p.blocktype = PRINT;
-                            cout << "pid=" << p.pid << " wTime " << p.printStartTime << endl;
-
-                            if (p.printStartTime != -1) {
-                                // 按 “操作码 时间 设备” 拆分
-                                istringstream iss(p.program);
-                                string op, dev;
-                                int origTime;
-                                iss >> op >> origTime >> dev;
-
-                                if (op == "OUTPUT") {
-                                    // 计算已执行时间和剩余时间
-                                    int elapsed = Timer - p.printStartTime;
-                                    int remTime = origTime - elapsed;
-                                    cout << "printTime=" << remTime << endl;
-
-                                    if (remTime > 0) {
-                                        // 还有剩余，更新 p.program
-                                        p.program = op + " " + to_string(remTime) + " " + dev;
-                                    }
-                                    else {
-                                        // 打印完成，清空或切到下一条
-                                        p.program.clear();
-                                    }
-                                }
-                            }
-                        }
-                        if (p.blocktype == FILEB) {
-                            FILE_delete(p);
-
-                        }
-                        suspend(p);
-                        for (list<PCB>::iterator i = blockList.begin(); i != blockList.end();) {
-                            if (i->pid == p.pid) {
-                                blockList.erase(i++);
-                            }
-                            else {
-                                i++;
-                            }
-                        }
-
-
-                        free_process_memory(it->pid);
-                        return;
-                        
-                    }
-                }
-            }
+    // 1. 平衡队列 - 如果队列0的进程数比队列1多，移动一个最低优先级的进程到队列1
+    if (readyList0.size() > readyList1.size()) {
+        // 找到队列0中优先级最低的进程
+        auto min_priority_it = std::min_element(readyList0.begin(), readyList0.end(),
+            [](const PCB& a, const PCB& b) {
+                return a.priority < b.priority;
+            });
+        
+        if (min_priority_it != readyList0.end()) {
+            // 将找到的进程移动到队列1
+            PCB process = *min_priority_it;
+            readyList0.erase(min_priority_it);
+            process.cpu_num = 1; // 更新CPU编号
+            readyList1.push_back(process);
+            std::cout << "将进程 " << process.pid << " 从CPU0队列移动到CPU1队列以平衡负载" << std::endl;
         }
     }
-    else if (inOrOut == 1) {//IN
-        pair<int, int> pcbPair = { INT_MIN, -1 };
-        for (list<PCB>::iterator it = suspendList.begin(); it != suspendList.end(); ++it) {
-            if (it->prority > pcbPair.first && it->task_size < blocks) {
-                pcbPair.first = it->prority;
-                pcbPair.second = it->pid;
-            }
-        }
-        if (pcbPair.second != -1) {
-            for (list<PCB>::iterator it = suspendList.begin(); it != suspendList.end(); ++it) {
-                if (it->pid == pcbPair.second) {
-                    PCB& p = *it;
-                    
-                    applyForSuspend(p);
-                    return;
-                }
-            }
-        }
+
+    // 2. 对队列0进行优先级排序（优先级高的在前）
+    readyList0.sort([](const PCB& a, const PCB& b) {
+        return a.priority > b.priority;
+    });
+
+    // 3. 对队列1进行响应比排序
+    updateRRAndSortByRR(readyList1);
+
+    // 打印调度结果
+    /*std::cout << "\n===== 调度结果 =====" << std::endl;
+    std::cout << "CPU0队列(优先级调度):" << std::endl;
+    for (const auto& p : readyList0) {
+        std::cout << "进程" << p.pid << " 优先级:" << p.priority << std::endl;
     }
+
+    std::cout << "\nCPU1队列(响应比调度):" << std::endl;
+    for (const auto& p : readyList1) {
+        std::cout << "进程" << p.pid << " 响应比:" << p.RR << std::endl;
+    }*/
+
+    ready_list_mutex.unlock();
 }
 
 

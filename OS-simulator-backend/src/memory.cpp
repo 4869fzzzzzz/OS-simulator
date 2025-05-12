@@ -10,6 +10,7 @@
 #include <iomanip>
 #include "../include/interrupt.h"
 #include <sstream>
+#include "memory.h"
 
 using namespace std;
 using namespace aigc;
@@ -140,6 +141,56 @@ int page_in(v_address v_addr, m_pid pid) {
            PAGE_SIZE);
     std::cout << "[DEBUG] Page in: Virtual page " << v_page_num << " -> Physical page " << p_page_num << std::endl;
     return 0;
+}
+
+int page_out(v_address v_addr, m_pid pid)
+{
+    // 计算虚拟页号
+    page v_page_num = v_addr / PAGE_SIZE;
+    PageTableItem& pt = page_table[v_page_num];
+    
+    // 检查页面所有权和是否在内存中
+    if (pt.owner != pid) {
+        cerr << "[ERROR] Process " << pid << " does not own page " << v_page_num << std::endl;
+        return 0;
+    }
+    
+    if (!pt.in_memory) {
+        cerr << "[ERROR] Page " << v_page_num << " is not in memory" << std::endl;
+        return 0;
+    }
+    
+    // 获取物理页号
+    page p_page_num = pt.p_id;
+    
+    // 将页面内容复制到磁盘
+    memcpy(&disk[v_page_num * PAGE_SIZE],
+           &memory[p_page_num * PAGE_SIZE],
+           PAGE_SIZE);
+           
+    // 更新页表项
+    pt.in_memory = false;
+    pt.p_id = FULL;
+    
+    // 更新物理页位图，标记为可用
+    p_page[p_page_num / 8] &= ~(1 << (p_page_num % 8));
+    
+    // 更新相关的帧信息
+    Frame* current = clock_hand;
+    do {
+        if (current->p_id == p_page_num) {
+            current->owner = FULL;
+            current->v_id = FULL;
+            current->used = false;
+            break;
+        }
+        current = current->next;
+    } while (current != clock_hand);
+    
+    std::cout << "[DEBUG] Page out: Virtual page " << v_page_num 
+              << " -> Disk, Physical page " << p_page_num << " freed" << std::endl;
+    
+    return 1;
 }
 
 page clock_replace() {
