@@ -256,6 +256,8 @@ bool RUN(std::string cmd, PCB* current_pcb){
                //产生设备中断，后续补充
                 int devicetype=stoi(scmd[2]);
                 int needtime=stoi(scmd[3]);
+                current_pcb->deviceStartTime = time_cnt;
+                current_pcb->deviceTime = needtime;
                 raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->block_time,needtime);
             }
 
@@ -267,6 +269,8 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 //产生设备中断，后续补充
                 int devicetype=stoi(scmd[2]);
                 int needtime=stoi(scmd[3]);
+                current_pcb->deviceStartTime = time_cnt;
+                current_pcb->deviceTime = needtime;
                 raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->block_time,needtime);
             }
 
@@ -303,7 +307,10 @@ bool RUN(std::string cmd, PCB* current_pcb){
 
                 PCB found;
                 bool isFound = false; // 标记是否找到进程
-
+                std::lock_guard<std::mutex> lock(ready_list_mutex);
+                readyList0.lock;
+                readyList1.lock;
+                blockList.lock;
                 // 查找并移除进程
                 for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
                     if (it->pid == tpid) {
@@ -329,12 +336,20 @@ bool RUN(std::string cmd, PCB* current_pcb){
                     std::cout << "Process with PID " << tpid << " has been blocked." << std::endl;
                     found.blocktype = SYSTEM;
                     found.block_time = get_nowSysTime();
-                    block(&found);
+                    block(found);
                 }
                 else {
                     std::cout << "Process does not exist or process can't be blocked." << std::endl;
-                    return false;
+                    std::lock_guard<std::mutex> unlock(ready_list_mutex);
+                    readyList0.unlock;
+                    readyList1.unlock;
+                    blockList.unlock;
+                    return true;
                 }
+                std::lock_guard<std::mutex> unlock(ready_list_mutex);
+                readyList0.unlock;
+                readyList1.unlock;
+                blockList.unlock;
                 return true;
             }
 
@@ -347,7 +362,10 @@ bool RUN(std::string cmd, PCB* current_pcb){
 
                 PCB found;
                 bool isFound = false; // 标记是否找到进程
-
+                std::lock_guard<std::mutex> lock(ready_list_mutex);
+                readyList0.lock;
+                readyList1.lock;
+                blockList.lock;
                 for (auto it = blockList.begin(); it != blockList.end(); ++it) {
                     if (it->pid == tpid) {
                         found = *it;
@@ -361,16 +379,23 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 }
 
                 if (isFound) {
-                    std::cout << "Process with PID " << tpid << " has been waked." << std::endl;
+                    std::cout << "Process with PID " << tpid << " has been waken." << std::endl;
                     found.blocktype = NOTBLOCK;
                     found.block_time = 0;
-                    ready(&found);
+                    ready(found);
                 }
                 else {
-                    std::cout << "Process does not exist or process can't be awake." << std::endl;
-                    return false;
+                    std::cout << "Process does not exist or process can't be waken." << std::endl;
+                    std::lock_guard<std::mutex> unlock(ready_list_mutex);
+                    readyList0.unlock;
+                    readyList1.unlock;
+                    blockList.unlock;
+                    return true;
                 }
-
+                std::lock_guard<std::mutex> unlock(ready_list_mutex);
+                readyList0.unlock;
+                readyList1.unlock;
+                blockList.unlock;
                 return true;
             }
         }else{
@@ -491,7 +516,17 @@ bool handleClientCmd(std::string cmd, std::string& result) {
 
     }else if(cmdType == "P"){
         //创建进程
-        LongTermScheduler(scmd[1], scmd[2]);
+        string path = scmd[1];
+        string fileName = scmd[2];
+        
+        // 将文件信息加入PCB等待队列
+        WaitingProcess waitingProcess;
+        waitingProcess.path = path;
+        waitingProcess.fileName = fileName;
+        waitingProcessList.push_back(waitingProcess);
+        
+        cout << "文件 " << fileName << " 已加入PCB等待队列" << endl;
+    
 
     }else if(cmdType == "B"){
          // 阻塞进程
@@ -499,6 +534,11 @@ bool handleClientCmd(std::string cmd, std::string& result) {
 
          PCB found;
          bool isFound = false; // 标记是否找到进程
+
+        std::lock_guard<std::mutex> lock(ready_list_mutex);
+        readyList0.lock;
+        readyList1.lock;
+        blockList.lock;
   
          // 查找并移除进程
          for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
@@ -518,40 +558,53 @@ bool handleClientCmd(std::string cmd, std::string& result) {
                      isFound = true;
                      break;
                  }
-             }
+            }
          }
   
             if (isFound) {
                 std::cout << "Process with PID " << pid << " has been blocked." << std::endl;
-                found.blocktype = USER;
-                found.block_time = get_nowSysTime();
-                block(&found);  
+                found.blocktype = SYSTEM;
+                found.block_time = time_cnt;
+                block(found);  
             }
             else {
                 std::cout << "Process does not exist or process can't be blocked." << std::endl;
             }
+            std::lock_guard<std::mutex> unlock(ready_list_mutex);
+            readyList0.unlock;
+            readyList1.unlock;
+            blockList.unlock;
 
     }else if(cmdType == "K"){
         //唤醒进程
         int targetPid = std::stoi(scmd[1]);  // 获取目标pid（假设scmd[1]是一个字符串）
         bool found = false;
-
+        std::lock_guard<std::mutex> lock(ready_list_mutex);
+        readyList0.lock;
+        readyList1.lock;
+        blockList.lock;
         // 遍历阻塞队列，找到目标pid的进程
         for (auto it = blockList.begin(); it != blockList.end(); ++it) {
             PCB* process = *it;
             if (process->pid == targetPid) {
                 // 找到了目标进程
-                blockList.erase(it);  // 从阻塞队列中移除该进程
-                process->block_time = 0;
-                ready(&process);
-                cout << "进程 " << process->pid << " 被唤醒" << endl;
-                found = true;
-                break;
+                if(process->blocktype == SYSTEM){
+                    blockList.erase(it);  // 从阻塞队列中移除该进程
+                    process->block_time = 0;
+                    ready(it);
+                    cout << "process " << process->pid << " has been waken" << endl;
+                    found = true;
+                    break;
+                }
             }
         }
+        std::lock_guard<std::mutex> unlock(ready_list_mutex);
+        readyList0.unlock;
+        readyList1.unlock;
+        blockList.unlock;
 
         if (!found) {
-            cout << "未找到pid为 " << targetPid << " 的进程" << endl;
+            cout << "Process does not exist or process can't be waken."<< endl;
         }
 
     }else if(cmdType == "E"){
@@ -569,17 +622,37 @@ void cpu_worker(CPU& cpu) {
     cpu.running = true;
     while (cpu.running) {
         PCB* current_pcb = nullptr;
+
+        std::lock_guard<std::mutex> lock(ready_list_mutex);
+        readyList0.lock();
+        readyList1.lock();
+        blockList.lock();
         //短期调度
-        if (scheduel == SCHED_RRP) {
-            RRP_sche();
+        if (SCHE0 == SCHED_RR) {
+        
+        } else if (SCHE0 == SCHED_PRO) {
+            // 按优先级调度，需要对就绪队列进行排序
+            sortReadyListByPriority(readyList0);
+        } else if (SCHE0 == SCHED_RRP) {
+            // 按响应比调度，需要对就绪队列进行排序
+            sortReadyListByResponseRatio(readyList0);
         }
-        else if (scheduel == SCHED_RR) {
-
+        
+        // 根据不同的调度策略调整CPU1的就绪队列
+        if (SCHE1 == SCHED_RR) {
+            
+        } else if (SCHE1 == SCHED_PRO) {
+            // 按优先级调度，需要对就绪队列进行排序
+            sortReadyListByPriority(readyList1);
+        } else if (SCHE1 == SCHED_RRP) {
+            // 按响应比调度，需要对就绪队列进行排序
+            sortReadyListByResponseRatio(readyList1);
         }
-        else if (scheduel == SCHED_PRO) {
-            pro_sche();
-        }
-
+    }
+    std::lock_guard<std::mutex> unlock(ready_list_mutex);
+    readyList0.unlock();
+    readyList1.unlock();
+    blockList.unlock();
         
         // 获取就绪进程
         {
@@ -672,7 +745,7 @@ void cpu_worker(CPU& cpu) {
                     }
                 }else{//进程已经运行完毕
                     // 释放当前进程资源
-                    delete current_pcb;
+                    stop(current_pcb);
                     current_pcb = nullptr;
                 }
                 current_pcb->apply_time = 0;
