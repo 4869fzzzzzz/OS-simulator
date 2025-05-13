@@ -3,14 +3,13 @@
 #include "../include/memory.h"
 #include <Windows.h>
 #include "../include/filesystem.h"
-#include <vector>
-#include <algorithm>
+
 #include <WinNls.h>
 #include <string>
 #include <iomanip>
 #include "../include/interrupt.h"
 #include <sstream>
-#include "memory.h"
+
 
 using namespace std;
 using namespace aigc;

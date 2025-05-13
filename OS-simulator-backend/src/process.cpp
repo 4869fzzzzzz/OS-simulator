@@ -1,4 +1,5 @@
 #include "../include/process.h"
+#include "../include/interrupt.h"
 #include <list>
 #include <string>
 #include <iostream>
@@ -6,7 +7,7 @@
 using namespace std;
 
 int pid_num = 1;
-int Timer = get_nowSysTime();
+
 // 定义全局变量
 list<PCB> PCBList;    // 总进程队列
 list<PCB> readyList0; // CPU0 的就绪队列
@@ -30,7 +31,6 @@ list<PCB> cpusche1; // CPU1 的调度队列
 list<pPCB> prePCBList; // 待创建PCB进程队列
 
 
-map<string, struct mutexInfo>fileMutex;
 
 // 占位实现 applyForResource
 /*void applyForResource(PCB& p) {
@@ -144,47 +144,6 @@ void RRP_sche() {
     updateRRAndSortByRR(readyList1);
 }
 
-void Keyboard_delete(PCB& p) {
-    for (list<PCB>::iterator i = waitForKeyBoardList.begin(); i != waitForKeyBoardList.end();) {
-        if (i->pid == p.pid) {
-            waitForKeyBoardList.erase(i++);
-        }
-        else {
-            i++;
-        }
-    }
-
-};
-
-void Print_delete(PCB& p) {
-    for (list<PCB>::iterator i = waitForPrintList.begin(); i != waitForPrintList.end();) {
-        if (i->pid == p.pid) {
-            waitForPrintList.erase(i++);
-        }
-        else {
-            i++;
-        }
-    }
-};
-
-void FILE_delete(PCB& p) {
-    // 在文件互斥锁表中找对应路径
-    auto it = fileMutex.find(p.fs);
-    if (it == fileMutex.end()) {
-        // 没有这个文件的互斥信息，直接返回
-        return;
-    }
-
-    auto& waitList = it->second.waitForFileList;
-
-    waitList.remove_if([&p](const PCB& pcb) {
-        return pcb.pid == p.pid;
-        });
-
-    if (waitList.empty()) {
-        it->second.isBusy = false;
-    }
-}
 
 /*进程是否处在占用键盘或等待键盘事件中*/
 bool Under_Keyboard(PCB& p) {
@@ -206,6 +165,7 @@ bool Under_Print(PCB& p) {
     return false;
 };
 
+/*
 static mutexInfo& getFileMutex(const string& fullpath) {
     auto it = fileMutex.find(fullpath);
     if (it == fileMutex.end()) {
@@ -214,7 +174,7 @@ static mutexInfo& getFileMutex(const string& fullpath) {
         tie(it, ignore) = fileMutex.emplace(fullpath, move(m));
     }
     return it->second;
-}
+}*/
 
 /*
 PCB* getRunningPCB(int cpu_num) {
@@ -225,7 +185,7 @@ PCB* getRunningPCB(int cpu_num) {
     }
     return nullptr;
 }*/
-
+/*
 void waitForFile(string filePath, string fileName) {
     int Timer = get_nowSysTime();
     cout << "filePath" << filePath;
@@ -243,7 +203,7 @@ void waitForFile(string filePath, string fileName) {
 
         }
     }
-}
+}*/
 /*
 void waitForKeyBoard() {
     //检查当前的wait队列 看是否有进程正在等待或占用键盘
@@ -341,7 +301,7 @@ void stop(PCB& p) {
 void suspend(PCB& p) {
 
     p.state = SUSPEND;
-    p.suspend_time = Timer;      // 记录当前时间
+    p.suspend_time = time_cnt.load();      // 记录当前时间
     
     suspendList_mutex.lock();
     suspendList.push_back(p);
@@ -433,7 +393,7 @@ PCB create(const string& path, const string& filename) {
     p.keyboardStartTime = -1;
     p.printStartTime = -1;
     p.filewriteStartTime = -1;
-    p.createtime = Timer;
+    p.createtime = time_cnt.load();
     p.RR = 0;
 
     return p;
@@ -802,28 +762,4 @@ std::string ProcessStatusManager::getProcessStateString(int state) {
         default: return "未知状态";
     }
 }
-
-void ProcessStatusManager::update() {
-    if (!need_update) {
-        return;
-    }
-    
-    updateOverview();
-    updateProcessTable();
-    updateCPUStatus();
-    
-    need_update = false;
-}
-
-const ProcessSystemStatusForUI& ProcessStatusManager::getCurrentStatus() const {
-    return current_status;
-}
-
-// 在需要发送状态时调用此函数
-std::string ProcessStatusManager::generateStatusJson() const {
-    // 这里需要实现JSON序列化
-    // 可以使用rapidjson或其他JSON库
-    return ""; // TODO: 实现JSON序列化
-}
-
 

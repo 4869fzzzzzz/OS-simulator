@@ -221,9 +221,20 @@ class InterruptSystemData {
         }
     
     private:
-        static std::string getInterruptTypeName(InterruptType type);
-        static std::string getHandlerName(InterruptFunc handler);
-        static std::string getDeviceType(int device_id);
-        static int calculateTotalInterrupts();
-        static int getTriggerCount(InterruptType type);
+        std::string getInterruptTypeName(InterruptType type);
+        std::string getHandlerName(InterruptFunc handler);
+        std::string getDeviceType(int device_id);
+        int calculateTotalInterrupts();
+        int getTriggerCount(InterruptType type);
 };
+
+class SystemSnapshot {
+public:
+    TimerData timer;
+    ProcessSystemStatusForUI process;
+    InterruptSystemData interrupt;
+
+    AIGC_JSON_HELPER(timer, process, interrupt)
+    AIGC_JSON_HELPER_RENAME("timer", "process", "interrupt")
+};
+void snapshotSend(int v1,int v2,std::string v3,int* v4, int v5);

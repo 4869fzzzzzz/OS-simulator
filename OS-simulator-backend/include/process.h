@@ -2,10 +2,7 @@
 
 
 #include "./headfile.h"
-#include "./socket.h"
-#include "./client.h"
 #include "./memory.h"
-#include "./device.h"
 #include "./filesystem.h"
 
 using namespace std;
@@ -118,11 +115,6 @@ typedef struct process_struct {
 }PCB;
 
 
-typedef struct mutexInfo {
-	bool isBusy;
-	string path;
-	list<PCB> waitForFileList;//等待文件队列
-};//文件互斥锁 读写共用
 
 typedef struct prePCB{
 	std::string path;
@@ -183,6 +175,9 @@ struct CPUStatusForUI {
     std::string current_instruction;
     int remaining_time;
     int running_pid;
+
+    AIGC_JSON_HELPER(cpu_id, current_instruction, remaining_time, running_pid)
+    AIGC_JSON_HELPER_RENAME("id", "instruction", "remaining", "pid")
 };
 
 // 进程表项
@@ -194,6 +189,9 @@ struct ProcessTableItemForUI {
     int cpu_num;             // CPU编号
     size_t memory_size;      // 内存占用
     std::string description;  // 描述信息
+
+    AIGC_JSON_HELPER(name, pid, state, user, cpu_num, memory_size, description)
+    AIGC_JSON_HELPER_RENAME("name", "pid", "state", "user", "cpu", "memory", "desc")
 };
 
 // 进程系统总览
@@ -202,18 +200,44 @@ struct ProcessOverviewForUI {
     int running_process;    // 运行进程数
     int blocked_process;    // 阻塞进程数
     std::vector<CPUStatusForUI> cpu_status;  // CPU状态
+
+    AIGC_JSON_HELPER(total_process, running_process, blocked_process, cpu_status)
+    AIGC_JSON_HELPER_RENAME("total", "running", "blocked", "cpus")
 };
 
 // 完整的进程系统状态
 struct ProcessSystemStatusForUI {
     ProcessOverviewForUI overview;
     std::vector<ProcessTableItemForUI> process_table;
+
+    AIGC_JSON_HELPER(overview, process_table)
+    AIGC_JSON_HELPER_RENAME("overview", "processes")
 };
 
 class ProcessStatusManager {
-private:
+public:
     ProcessSystemStatusForUI current_status;
     std::atomic<bool> need_update{true};
+
+    ProcessStatusManager() = default;
+    
+    void update() {
+        if (!need_update) {
+            return;
+        }
+        updateOverview();
+        updateProcessTable();
+        updateCPUStatus();
+        need_update = false;
+    }
+    
+    const ProcessSystemStatusForUI& getCurrentStatus() const {
+        return current_status;
+    }
+    
+    void markForUpdate() { 
+        need_update = true; 
+    }
 
     // 更新总览信息
     void updateOverview();
@@ -223,19 +247,4 @@ private:
     void updateCPUStatus();
     // 获取进程状态描述
     std::string getProcessStateString(int state);
-
-public:
-    ProcessStatusManager() = default;
-    
-    // 更新所有状态信息
-    void update();
-    
-    // 获取当前状态
-    const ProcessSystemStatusForUI& getCurrentStatus() const;
-    
-    // 标记需要更新
-    void markForUpdate() { need_update = true; }
-    
-    // 生成JSON格式的状态信息
-    std::string generateStatusJson() const;
 };
