@@ -17,6 +17,7 @@ int main(){
     SetConsoleOutputCP(CP_UTF8);
     //socket初始化
     init_memory();
+    Init_Device();
 #if SOCKETBEGIN
     
     /*if (!serverSocket.isValid()) {

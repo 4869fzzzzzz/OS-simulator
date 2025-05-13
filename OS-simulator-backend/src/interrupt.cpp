@@ -67,7 +67,7 @@ void errorHandle(int v1,int v2,std::string v3,int* v4, int v5){
 }
 //中断产生
 void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int v5){
-    incrementInterruptCount(t);
+    InterruptSystemData::incrementCount(t);
     Interrupt itp(t, v1, v2, v3, v4, v5);
     if(handleFlag.load()){
         readyInterruptQueue.push(itp);
@@ -929,24 +929,7 @@ std::string InterruptSystemData::getDeviceType(int device_id) {
     }
 }
 
-// 中断计数相关函数
-int InterruptSystemData::calculateTotalInterrupts() {
-    static std::atomic<int> total_interrupts{0};
-    return total_interrupts.load(std::memory_order_relaxed);
-}
 
-int InterruptSystemData::getTriggerCount(InterruptType type) {
-    static std::map<InterruptType, std::atomic<int>> trigger_counts;
-    return trigger_counts[type].load(std::memory_order_relaxed);
-}
-
-void incrementInterruptCount(InterruptType type) {
-    static std::map<InterruptType, std::atomic<int>> trigger_counts;
-    static std::atomic<int> total_interrupts{0};
-    
-    trigger_counts[type].fetch_add(1, std::memory_order_relaxed);
-    total_interrupts.fetch_add(1, std::memory_order_relaxed);
-}
 
 void snapshotSend(int v1, int v2, std::string v3, int* v4, int v5) {
     try {
@@ -967,8 +950,19 @@ void snapshotSend(int v1, int v2, std::string v3, int* v4, int v5) {
         
         // 3. 更新中断状态
         snapshot.interrupt.update();
+
+        // 4. 更新内存状态
+        fillMemoryStatus(snapshot.memory);
+
+        // 5. 更新文件状态
+        fillFilesystemStructure(snapshot.file,fs);
+
+        // 6. 更新设备状态
+        static DeviceStatusManager deviceStatus;
+        deviceStatus.update();
+        snapshot.device = deviceStatus.getCurrentStatus();
         
-        // 4. 使用 AIGC 序列化整个快照对象
+        // 7. 使用 AIGC 序列化整个快照对象
         std::string json_obj;
         if(JsonHelper::ObjectToJson(snapshot, json_obj)) {
             std::string jsonStr = json_obj;
