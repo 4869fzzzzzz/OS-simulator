@@ -80,7 +80,7 @@ void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int 
 //中断处理
 void handleInterrupt(){
     // 增加处理中断的CPU计数
-    std::cout<<"处理中断"<<std::endl;
+    //std::cout<<"处理中断"<<std::endl;
     interrupt_handling_cpus++;
     // 等待另一个CPU也进入中断处理
     while (interrupt_handling_cpus < 2) {
@@ -224,6 +224,7 @@ time_t get_nowSysTime(){
 //运行一条指令
 bool RUN(std::string cmd, PCB* current_pcb){
     std::vector<std::string> scmd;
+    cout<<"RUNNING PROCESS:pid:"<<current_pcb->pid<<"instruction:"<<cmd<<endl;
     CmdSplit(cmd,scmd);
     if(scmd.size()<2){
         raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
@@ -765,6 +766,7 @@ void cpu_worker(CPU& cpu) {
     while (cpu.running) {
         //std::cout<<"running"<<std::endl;
         PCB* current_pcb = nullptr;
+        cpu.running_time++;
         //短期调度
         shortScheduler();  
         // 获取就绪进程
