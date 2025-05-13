@@ -531,7 +531,44 @@ bool handleClientCmd(std::string cmd, std::string& result) {
             result = "Delete file failed: " + filename;
             return false;
         }
-        
+    }else if(cmdType=="U"){
+        //创建目录
+        if(scmd.size() < 3){
+            std::cout << "Invalid command: " << cmdType << std::endl;
+            result = "Invalid command: Missing directory path or name";
+            return false;
+        }
+        std::string path = scmd[1];    // 目录位置
+        std::string dirname = scmd[2];  // 目录名
+
+        if(fs.createDirectory(path, dirname) == 0){
+            std::cout << "Create directory success: " << dirname << std::endl;
+            result = "Create directory success: " + dirname;
+            return true;
+        } else {
+            std::cout << "Create directory failed: " << dirname << std::endl;
+            result = "Create directory failed: " + dirname;
+            return false;
+        }
+    }
+    else if(cmdType=="X"){
+        //删除目录
+        if(scmd.size() < 2){
+            std::cout << "Invalid command: " << cmdType << std::endl;
+            result = "Invalid command: Missing directory path";
+            return false;
+        }
+        std::string path = scmd[1];  // 目录路径
+
+        if(fs.deleteDirectoryRecursive(path) == 0){
+            std::cout << "Delete directory success: " << path << std::endl;
+            result = "Delete directory success: " + path;
+            return true;
+        } else {
+            std::cout << "Delete directory failed: " << path << std::endl;
+            result = "Delete directory failed: " + path;
+            return false;
+        }
     }else if(cmdType == "W"){
         //写文件
         if(scmd.size() < 4){
@@ -542,7 +579,7 @@ bool handleClientCmd(std::string cmd, std::string& result) {
         std::string filename = scmd[2];
         std::string content = scmd[3];
         if(fs.writeFile(cata,filename,content)==0){
-            std::cout << "Write file success: " << filename << std::endl;
+            std::cout << "Write file success: " << filename <<"content:"<<content<< std::endl;
             result = "Write file success: " + filename;
             return true;
         }else{
