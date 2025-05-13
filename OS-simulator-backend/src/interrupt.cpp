@@ -766,7 +766,7 @@ void cpu_worker(CPU& cpu) {
     while (cpu.running) {
         //std::cout<<"running"<<std::endl;
         PCB* current_pcb = nullptr;
-        cpu.running_time++;
+        //cpu.running_time++;
         //短期调度
         shortScheduler();  
         // 获取就绪进程
