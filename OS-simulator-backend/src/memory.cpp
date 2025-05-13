@@ -598,8 +598,9 @@ void test_memory1() {
     // 测试1：基本内存分配与释放
     std::cout << "\n[Test 1] Basic allocation and free:" << std::endl;
     m_pid pid1 = 1;
-    v_address addr1 = alloc_for_process(pid1, 8192);
+    v_address addr1 = alloc_for_process(pid1, 1024);
     std::cout << "Process 1 allocated at: " << addr1 / PAGE_SIZE << " (page number)" << std::endl;
+    print_memory_usage();
     free_process_memory(pid1);
     std::cout << "Freed process 1 memory" << std::endl;
     print_memory_usage();
@@ -608,10 +609,10 @@ void test_memory1() {
     // 测试2：多进程内存分配
     std::cout << "\n[Test 2] Multi-process allocation:" << std::endl;
     m_pid pid2 = 2;
-    v_address addr2 = alloc_for_process(pid2, 16384);
+    v_address addr2 = alloc_for_process(pid2, 4096);
     std::cout << "Process 2 allocated at: " << addr2 / PAGE_SIZE << " (page number)" << std::endl;
     m_pid pid3 = 3;
-    v_address addr3 = alloc_for_process(pid3, 8192);
+    v_address addr3 = alloc_for_process(pid3, 2048);
     std::cout << "Process 3 allocated at: " << addr3 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
@@ -631,7 +632,7 @@ void test_memory1() {
     // 测试5：文件内存分配与释放
     std::cout << "\n[Test 5] File memory allocation:" << std::endl;
     v_address file_addr;
-    if (alloc_for_file(8192, &file_addr) == 0) {
+    if (alloc_for_file(2048, &file_addr) == 0) {
         std::cout << "File memory allocated at: " << file_addr / PAGE_SIZE << " (page number)" << std::endl;
         //free_file_memory(file_addr);
         //std::cout << "Freed file memory" << std::endl;
@@ -642,35 +643,38 @@ void test_memory1() {
     std::cout << "\n[Test 6] Page replacement and page in verification:" << std::endl;
 
     // 分配大量内存以触发页面置换
-    v_address addr4 = alloc_for_process(4, 4096);
+    v_address addr4 = alloc_for_process(4, 1024);
     std::cout << "Process 4 allocated at: " << addr4 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
-    v_address addr5 = alloc_for_process(5, 4096);
+    v_address addr5 = alloc_for_process(5, 1024);
     std::cout << "Process 5 allocated at: " << addr5 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
-    v_address addr6 = alloc_for_process(6, 4096);
+    v_address addr6 = alloc_for_process(6, 1024);
     std::cout << "Process 6 allocated at: " << addr6 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
-    v_address addr7 = alloc_for_process(7, 4096);
+    free_process_memory(pid2);
+    print_memory_usage();
+
+    v_address addr7 = alloc_for_process(7, 1024);
     std::cout << "Process 7 allocated at: " << addr7 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
-    v_address addr8 = alloc_for_process(8, 8192);
+    v_address addr8 = alloc_for_process(8, 2048);
     std::cout << "Process 8 allocated at: " << addr8 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
-    v_address addr9 = alloc_for_process(9, 8192);
+    v_address addr9 = alloc_for_process(9, 2048);
     std::cout << "Process 9 allocated at: " << addr9 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
-    v_address addr10 = alloc_for_process(10, 8192);
+    v_address addr10 = alloc_for_process(10, 2048);
     std::cout << "Process 10 allocated at: " << addr10 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
-    v_address addr11 = alloc_for_process(11, 4096);
+    v_address addr11 = alloc_for_process(11, 1024);
     std::cout << "Process 11 allocated at: " << addr11 / PAGE_SIZE << " (page number)" << std::endl;
     print_memory_usage();
 
@@ -813,7 +817,7 @@ void test_memory_swap() {
 
     // 模拟分配虚拟内存
     m_pid pid = 1;
-    v_address addr = alloc_for_process(pid, 8192);
+    v_address addr = alloc_for_process(pid, 2048);
     std::cout << "Process 1 allocated virtual memory at: " << addr << std::endl;
 
     // 模拟写入数据到虚拟内存
@@ -889,8 +893,8 @@ void test_filesystem1() {
 
     // 测试3：边界条件测试
     std::cout << "\n[Test 3] Boundary condition test:" << std::endl;
-    // 创建正好占满一个块的文件（4096字节）
-    fs.createFile("/", "4kfile", FILE_TYPE, 4096);
+    // 创建正好占满一个块的文件
+    fs.createFile("/", "4kfile", FILE_TYPE, 1024);
     string fullBlock(4096, 'C');
     int writeResult = fs.writeFile("/", "4kfile", fullBlock);
     std::cout << "Full block write: " 
@@ -899,7 +903,7 @@ void test_filesystem1() {
 
     // 测试4：大文件测试
     std::cout << "\n[Test 4] Large file test:" << std::endl;
-    const int LARGE_SIZE = 8 * 4096;  // 8个块
+    const int LARGE_SIZE = 8 * 1024;  // 8个块
     fs.createFile("/", "large.bin", FILE_TYPE, LARGE_SIZE);
     
     string largeData(LARGE_SIZE, 'D');
@@ -921,7 +925,7 @@ void test_filesystem1() {
 }
 
 void test_directory_operations() {
-    FileSystem fs(1024, 4096);
+    FileSystem fs(10, 1024);
 
     // 创建目录
     fs.createDirectory("/", "documents");
@@ -1016,7 +1020,7 @@ void test_filesystem_with_memory() {
 
     // 初始化文件系统和内存管理
     init_memory();  // 初始化内存模块
-    FileSystem fs(256, 4096);  // 初始化文件系统（256块，每块4096字节）
+    FileSystem fs(10, 1024);  // 初始化文件系统（256块，每块4096字节）
 
     // Step 1: 创建目录结构
     std::cout << "[Step 1] Creating directory structure..." << std::endl;
@@ -1080,7 +1084,7 @@ void test_filesystem_with_memory() {
 
     // Step 7: 页面置换测试
     std::cout << "\n[Step 5] Testing page replacement..." << std::endl;
-    v_address another_addr = alloc_for_process(2, 8192);
+    v_address another_addr = alloc_for_process(2, 2048);
     std::cout << "Another allocation at: 0x" << std::hex << another_addr << std::dec << std::endl;
     print_memory_usage();
 
