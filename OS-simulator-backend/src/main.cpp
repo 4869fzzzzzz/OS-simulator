@@ -17,8 +17,7 @@
 int main(){
     SetConsoleOutputCP(CP_UTF8);
     //socket初始化
-    init_memory();
-    Init_Device();
+    
 #if SOCKETBEGIN
     
     /*if (!serverSocket.isValid()) {
@@ -31,6 +30,7 @@ int main(){
         std::cerr << "设置非阻塞模式失败: " << e.what() << std::endl;
         return 1;
     }*/
+    
     std::thread recv_thread(RecvThread);
     while(!serverSocket.acceptflag){}
 #else   
@@ -41,6 +41,8 @@ int main(){
     
     PCB npcb;
     Interrupt_Init(); 
+    init_memory();
+    Init_Device();
     std::thread cpu0_thread(cpu_worker, std::ref(cpu0));//短期调度在该线程内执行
     std::thread cpu1_thread(cpu_worker, std::ref(cpu1));
 

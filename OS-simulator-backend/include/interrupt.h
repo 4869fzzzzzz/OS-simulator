@@ -41,17 +41,59 @@ struct Interrupt {
     int value1;
     int value2;
     std::string value3;
-    int* value4;
+    std::shared_ptr<int> value4;  // 使用智能指针
     int value5;
-    long long timecount;//产生中断时间
-    Interrupt(InterruptType tp,int v1,int v2,std::string v3,int* v4,int v5){
-        type=tp;
-        value1=v1;
-        value2=v2;
-        value3=v3;
-        value4=v4;
-        value5=v5;
-        timecount=time_cnt.load();
+    long long timecount;
+
+    // 构造函数
+    Interrupt(InterruptType tp, int v1, int v2, std::string v3, int* v4, int v5) 
+        : type(tp), 
+          value1(v1), 
+          value2(v2), 
+          value3(v3),
+          value4(v4 ? std::make_shared<int>(*v4) : nullptr),  // 创建智能指针
+          value5(v5),
+          timecount(time_cnt.load()) {}
+
+
+    // 拷贝构造函数
+     Interrupt(const Interrupt& other) = default;
+    // 赋值运算符
+    Interrupt& operator=(const Interrupt& other) {
+        if (this != &other) {
+            type = other.type;
+            value1 = other.value1;
+            value2 = other.value2;
+            value3 = other.value3;
+            value4 = other.value4;
+            value5 = other.value5;
+            timecount = other.timecount;
+        }
+        return *this;
+    }
+
+    // 移动构造函数
+    Interrupt(Interrupt&& other) noexcept :
+        type(other.type),
+        value1(other.value1),
+        value2(other.value2),
+        value3(std::move(other.value3)),
+        value4(std::move(other.value4)),
+        value5(other.value5),
+        timecount(other.timecount) {}
+
+    // 移动赋值运算符
+    Interrupt& operator=(Interrupt&& other) noexcept {
+        if (this != &other) {
+            type = other.type;
+            value1 = other.value1;
+            value2 = other.value2;
+            value3 = std::move(other.value3);
+            value4 = std::move(other.value4);
+            value5 = other.value5;
+            timecount = other.timecount;
+        }
+        return *this;
     }
 };
 
@@ -236,16 +278,23 @@ class InterruptSystemData {
         std::string getHandlerName(InterruptFunc handler);
         std::string getDeviceType(int device_id);
         int calculateTotalInterrupts() {
-            return getTotalInterrupts().load(std::memory_order_relaxed);
+            return getTotalInterrupts().load(std::memory_order_acquire);
         }
-        
+
         int getTriggerCount(InterruptType type) {
-            return getTriggerCounts()[type].load(std::memory_order_relaxed);
+            return getTriggerCounts()[type].load(std::memory_order_acquire);
         }
-        
+
         static void incrementCount(InterruptType type) {
-            getTriggerCounts()[type].fetch_add(1, std::memory_order_relaxed);
-            getTotalInterrupts().fetch_add(1, std::memory_order_relaxed);
+            // 先更新类型计数
+            auto& typeCount = getTriggerCounts()[type];
+            typeCount.store(typeCount.load(std::memory_order_acquire) + 1, 
+                        std::memory_order_release);
+            
+            // 再更新总计数
+            auto& totalCount = getTotalInterrupts();
+            totalCount.store(totalCount.load(std::memory_order_acquire) + 1, 
+                            std::memory_order_release);
         }
 };
 

@@ -15,7 +15,7 @@ time_t startSysTime;
 time_t nowSysTime;
 std::thread th[2];
 std::atomic<int> interrupt_handling_cpus{0};  // 定义正在处理中断的CPU数量
-int scheduel;
+
 
 CPU cpu0(0),cpu1(1);
 
@@ -79,34 +79,41 @@ void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int 
 }
 //中断处理
 void handleInterrupt(){
-    // 增加处理中断的CPU计数
-    //std::cout<<"处理中断"<<std::endl;
-    interrupt_handling_cpus++;
+    
+    interrupt_handling_cpus.store(interrupt_handling_cpus.load()+1);
     // 等待另一个CPU也进入中断处理
-    while (interrupt_handling_cpus < 2) {
+    while (interrupt_handling_cpus.load() < 2) {
         std::this_thread::yield();
     }
     
     handleFlag.store(1);
-    while(!InterruptQueue.empty()){
+    while(!InterruptQueue.empty()) {
         std::lock_guard<std::mutex> lock(iq);
         if (InterruptQueue.empty()) {
-            return;
+            break;
         }
-        Interrupt tmp=InterruptQueue.top();
+        Interrupt tmp = InterruptQueue.top();
         InterruptQueue.pop();
         iq.unlock();
-        InterruptVectorTable[static_cast<int>(tmp.type)].handler(tmp.value1,tmp.value2,tmp.value3,tmp.value4,tmp.value5);
+        
+        // 获取原始指针
+        int* raw_ptr = tmp.value4 ? tmp.value4.get() : nullptr;
+        InterruptVectorTable[static_cast<int>(tmp.type)].handler(
+            tmp.value1,
+            tmp.value2,
+            tmp.value3,
+            raw_ptr,  // 使用原始指针
+            tmp.value5
+        );
     }
     std::lock_guard<std::mutex> lock(iq);
     while(!readyInterruptQueue.empty()){
-        Interrupt tmp=readyInterruptQueue.front();
-        InterruptQueue.push(tmp);
+        InterruptQueue.push(std::move(readyInterruptQueue.front()));
         readyInterruptQueue.pop();
     }
     iq.unlock();
     // 减少处理中断的CPU计数
-    interrupt_handling_cpus--;
+    interrupt_handling_cpus.store(interrupt_handling_cpus.load()-1);
     handleFlag.store(0);
 }
 //工具函数
@@ -185,8 +192,8 @@ void TimeThread(int interval = Normal_Timer_Interval) {
         if (timerInterruptValid.load()) {  
             raiseInterrupt(InterruptType::TIMER, 0, 0, "", nullptr, 0);
         }
-        time_cnt.fetch_add(1);
-        
+        time_cnt.store(time_cnt.load()+1);
+        cout<<time_cnt.load()<<endl;
         if((valid.load()|1<<static_cast<int>(InterruptType::SNAPSHOT))&&time_cnt.load()%10==0){
         #if SOCKETBEGIN
             std::cout<<"产生时钟中断"<<std::endl;

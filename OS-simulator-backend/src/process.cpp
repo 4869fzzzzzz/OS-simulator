@@ -328,6 +328,7 @@ void check_suspended_processes() {
 
 
 // 定义解析结果结构体
+/*
 struct ProcessInfo {
     int M = -1;      // 内存块数
     int Y = -1;      // 优先级
@@ -367,7 +368,7 @@ ProcessInfo parseFileContent(const string& content) {
 
     return info;
 }
-
+*/
 
 // 创建PCB
 PCB create(const string& path, const string& filename) {

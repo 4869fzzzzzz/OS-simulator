@@ -19,8 +19,8 @@ private:
     bool hasInterrupt;
     int using_pid{-1};
     size_t memory_address{0};
-    std::atomic<long long> total_use_time{0};
-    std::atomic<int> use_count{0};
+    /*std::atomic<long long> total_use_time{0};
+    std::atomic<int> use_count{0};*/
 
 public:
     Device(int id, DeviceType type, const std::string& name)
@@ -38,17 +38,17 @@ public:
     void clearInterrupt() { hasInterrupt = false; }
      int getUsingPid() const { return using_pid; }
     size_t getMemoryAddress() const { return memory_address; }
-    long long getTotalUseTime() const { return total_use_time.load(); }
-    int getUseCount() const { return use_count.load(); }
+    //long long getTotalUseTime() const { return total_use_time.load(); }
+    //int getUseCount() const { return use_count.load(); }
     
     void setUsingPid(int pid) { 
         using_pid = pid; 
         if (pid != -1) {
-            use_count.fetch_add(1);
+            //use_count.fetch_add(1);
         }
     }
     void setMemoryAddress(size_t addr) { memory_address = addr; }
-    void addUseTime(long long time) { total_use_time.fetch_add(time); }
+    //void addUseTime(long long time) { total_use_time.fetch_add(time); }
 
     /*void generateInterupt(InteruptType type, int value) {
         hasInterrupt = true;
