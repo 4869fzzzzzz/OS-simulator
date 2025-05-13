@@ -30,6 +30,9 @@ atom_data memory[MEMORY_SIZE] = { 0 };
 // 磁盘空间（存放被换出的页面）
 atom_data disk[DISK_SIZE] = { 0 };
 
+int g_last_page_in = -1;      // 最近换入页面号
+int g_last_page_out = -1;     // 最近换出页面号
+
 // ---------------- 辅助函数声明 ----------------
 
 // 查找一个空闲的物理页
@@ -134,6 +137,8 @@ int page_in(v_address v_addr, m_pid pid) {
     pt.in_memory = true;
     p_page[p_page_num / 8] |= 1 << (p_page_num % 8);
 
+    g_last_page_in = v_page_num;  // 记录最近换入的虚拟页号
+
     // 从磁盘中恢复页面内容到内存
     memcpy(&memory[p_page_num * PAGE_SIZE],
            &disk[v_page_num * PAGE_SIZE],
@@ -203,6 +208,9 @@ page clock_replace() {
             // 查找对应的虚拟页
             for (int i = 0; i < PAGE_TABLE_SIZE; ++i) {
                 if (page_table[i].p_id == victim && page_table[i].owner == current->owner) {
+                    // 获取虚拟页号
+                    page v_page_num = page_table[i].v_id;  // 虚拟页号
+
                     // 将内存数据写入磁盘
                     memcpy(&disk[page_table[i].v_id * PAGE_SIZE],
                            &memory[victim * PAGE_SIZE],
@@ -212,6 +220,8 @@ page clock_replace() {
                     page_table[i].in_memory = false;
                     page_table[i].p_id = FULL;
                     p_page[victim / 8] &= ~(1 << (victim % 8));
+
+                    g_last_page_out = v_page_num;//最近换出的虚拟页号
                     
                     clock_hand = current->next; // 移动时钟指针
                     std::cout << "[DEBUG] Page out: Physical page " << victim << " -> Virtual page " << current->v_id << std::endl;
@@ -540,43 +550,45 @@ void fillMemoryStatus(MemoryStatusForUI& status) {
 
     // 置换算法信息
     status.replacement_info.current_clock_hand = clock_hand ? clock_hand->p_id : -1;
-    static int last_page_in = -1;
-    static int last_page_out = -1;
     status.replacement_info.last_page_in = last_page_in;
     status.replacement_info.last_page_out = last_page_out;
     status.replacement_info.replacement_count = g_page_replacement_count;
 
-    // 进程内存映射表
+    // 进程内存映射表 - 每个页表项生成一条记录
     for (int i = 0; i < PAGE_TABLE_SIZE; ++i) {
         const PageTableItem& pt = page_table[i];
-        if (pt.owner == FULL || pt.v_id == FULL) continue;
 
-        ProcessMemoryMappingItem item;
-        item.pid = pt.owner;
-        item.page_count = 1;
+    // 跳过未分配或无效页
+    if (pt.owner == FULL || pt.v_id == FULL) continue;
 
-        // 虚拟地址范围
-        v_address v_start = pt.v_id * PAGE_SIZE;
-        v_address v_end = v_start + PAGE_SIZE - 1;
-        std::stringstream ss_v;
-        ss_v << "0x" << std::hex << v_start << "-0x" << v_end;
-        item.v_address_range = ss_v.str();
+    ProcessMemoryMappingItem item;
+    item.pid = pt.owner;
+    item.page_count = 1; // 每条记录只表示一个页面
 
-        // 物理地址范围
-        if (pt.in_memory) {
-            p_address p_start = pt.p_id * PAGE_SIZE;
-            p_address p_end = p_start + PAGE_SIZE - 1;
-            std::stringstream ss_p;
-            ss_p << "0x" << std::hex << p_start << "-0x" << p_end;
-            item.p_address_range = ss_p.str();
-            item.status = "in_memory";
-        } else {
-            item.p_address_range = "N/A";
-            item.status = "swapped_out";
-        }
+    // 虚拟地址范围：v_id => v_start ~ v_end
+    v_address v_start = pt.v_id * PAGE_SIZE;
+    v_address v_end = v_start + PAGE_SIZE - 1;
 
-        status.process_mappings.push_back(item);
+    std::stringstream ss_v;
+    ss_v << "0x" << std::hex << v_start << "-0x" << v_end << std::dec;
+    item.v_address_range = ss_v.str();
+
+    // 物理地址范围：p_id => p_start ~ p_end
+    if (pt.in_memory) {
+        p_address p_start = pt.p_id * PAGE_SIZE;
+        p_address p_end = p_start + PAGE_SIZE - 1;
+
+        std::stringstream ss_p;
+        ss_p << "0x" << std::hex << p_start << "-0x" << p_end << std::dec;
+        item.p_address_range = ss_p.str();
+        item.status = "in_memory";
+    } else {
+        item.p_address_range = "N/A";
+        item.status = "swapped_out";
     }
+
+    status.process_mappings.push_back(item);
+}
 }
 
 void sendMemoryStatusToUI() {
