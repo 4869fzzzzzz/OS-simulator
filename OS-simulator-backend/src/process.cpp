@@ -473,6 +473,7 @@ void CreatePCB()
         suspendList_mutex.unlock();
         prePCBList.pop_front();
         prePCBList_mutex.unlock();
+        std::cout<<"PCB"<<newProcess.pid<<"被添加到挂起队列"<<std::endl;
     }
 }
 void AllocateMemoryForPCB()
