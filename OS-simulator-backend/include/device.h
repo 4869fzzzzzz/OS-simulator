@@ -95,6 +95,7 @@ public:
         return devices;
     }
 };
+extern DeviceManager manager;
 
 // 设备状态项
 struct DeviceStatusItemForUI {
@@ -122,7 +123,7 @@ struct DeviceOverviewForUI {
 };
 
 // 完整的设备系统状态
-struct DeviceSystemStatusForUI {
+class DeviceSystemStatusForUI {
     DeviceOverviewForUI overview;
     std::vector<DeviceStatusItemForUI> device_table;
     
@@ -132,12 +133,12 @@ struct DeviceSystemStatusForUI {
 // ...existing code...
 
 // 设备状态管理类
-class DeviceStatusManager {
-private:
+/*class DeviceStatusManager {
+public:
     DeviceSystemStatusForUI current_status;
     std::atomic<bool> need_update{true};
 
-public:
+
     DeviceStatusManager() = default;
     
     void update() {
@@ -200,7 +201,7 @@ private:
             default: return "未知";
         }
     }
-};
+};*/
 
 // 在Device类中添加必要的接口
 
@@ -209,4 +210,3 @@ void createDevices(DeviceManager& manager);
 void callDeviceInterrupt(int pcb_id, int type, std::string info,int* flag, int seconds) ;
 
 
-extern DeviceManager manager;
