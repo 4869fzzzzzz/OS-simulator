@@ -173,3 +173,69 @@ void FILE_delete(PCB& p);
 void Print_delete(PCB& p);
 void Keyboard_delete(PCB& p);
 void removePCBFromQueue(PCB* current_pcb);
+
+
+//UI数据交换
+
+// CPU状态信息
+struct CPUStatusForUI {
+    int cpu_id;
+    std::string current_instruction;
+    int remaining_time;
+    int running_pid;
+};
+
+// 进程表项
+struct ProcessTableItemForUI {
+    std::string name;         // 进程名称
+    int pid;                  // 进程ID
+    std::string state;        // 进程状态
+    std::string user;         // 用户名
+    int cpu_num;             // CPU编号
+    size_t memory_size;      // 内存占用
+    std::string description;  // 描述信息
+};
+
+// 进程系统总览
+struct ProcessOverviewForUI {
+    int total_process;      // 总进程数
+    int running_process;    // 运行进程数
+    int blocked_process;    // 阻塞进程数
+    std::vector<CPUStatusForUI> cpu_status;  // CPU状态
+};
+
+// 完整的进程系统状态
+struct ProcessSystemStatusForUI {
+    ProcessOverviewForUI overview;
+    std::vector<ProcessTableItemForUI> process_table;
+};
+
+class ProcessStatusManager {
+private:
+    ProcessSystemStatusForUI current_status;
+    std::atomic<bool> need_update{true};
+
+    // 更新总览信息
+    void updateOverview();
+    // 更新进程表
+    void updateProcessTable();
+    // 更新CPU状态
+    void updateCPUStatus();
+    // 获取进程状态描述
+    std::string getProcessStateString(int state);
+
+public:
+    ProcessStatusManager() = default;
+    
+    // 更新所有状态信息
+    void update();
+    
+    // 获取当前状态
+    const ProcessSystemStatusForUI& getCurrentStatus() const;
+    
+    // 标记需要更新
+    void markForUpdate() { need_update = true; }
+    
+    // 生成JSON格式的状态信息
+    std::string generateStatusJson() const;
+};
