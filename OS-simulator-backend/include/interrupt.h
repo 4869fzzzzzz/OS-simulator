@@ -23,6 +23,8 @@ extern std::atomic<int> interrupt_handling_cpus;  // 记录正在处理中断的
 struct process_struct;
 typedef process_struct PCB;
 
+
+
 enum class InterruptType { //枚举中断类型-类型的数值用于标注在中断向量表中的位置
     TIMER = 0,
     DEVICE = 1, //设备采用中断触发
@@ -120,6 +122,7 @@ struct CPU {
     CPU(int cpu_id) : id(cpu_id), busy(false), running_process(nullptr), running(false) {}
 
 };
+extern CPU cpu0,cpu1;
 
 bool RUN(std::string cmd,PCB* current_pcb);//运行一条指令
 void CmdSplit(const std::string& cmd,std::vector<std::string>& scmd);//划分指令
@@ -127,6 +130,8 @@ bool handleClientCmd(std::string cmd, std::string& result);
 void cpu_worker(CPU& cpu);
 
 void incrementInterruptCount(InterruptType type);
+
+
 //UI数据交换
 class TimerData{
 public:

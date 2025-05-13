@@ -684,3 +684,146 @@ void shortScheduler() {
 }
 
 
+
+void ProcessStatusManager::updateOverview() {
+    ProcessOverviewForUI& overview = current_status.overview;
+    
+    overview.total_process = PCBList.size();
+    overview.running_process = 0;
+    overview.blocked_process = blockList.size();
+    
+    // 统计运行中的进程
+    for (const auto& pcb : PCBList) {
+        if (pcb.state == RUNNING) {
+            overview.running_process++;
+        }
+    }
+}
+
+void ProcessStatusManager::updateProcessTable() {
+    current_status.process_table.clear();
+    
+    for (const auto& pcb : PCBList) {
+        ProcessTableItemForUI item;
+        
+        // 从进程控制块提取信息
+        item.name = pcb.position.substr(pcb.position.find_last_of('/') + 1);
+        item.pid = pcb.pid;
+        item.state = getProcessStateString(pcb.state);
+        item.user = "user";  // 可以根据需要设置用户信息
+        item.cpu_num = pcb.cpu_num;
+        item.memory_size = pcb.task_size;
+        
+        // 设置描述信息
+        if (pcb.state == DEAD) {
+            item.description = "正常退出";
+        } else if (pcb.blocktype != NOTBLOCK) {
+            item.description = "被阻塞: " + std::to_string(pcb.start_block_time);
+        } else {
+            item.description = "正常运行中";
+        }
+        
+        current_status.process_table.push_back(item);
+    }
+}
+
+void ProcessStatusManager::updateCPUStatus() {
+    std::vector<CPUStatusForUI>& cpu_status = current_status.overview.cpu_status;
+    cpu_status.clear();
+    
+    // 创建 CPU0 状态
+    {
+        CPUStatusForUI cpu0s;
+        cpu0s.cpu_id = 0;
+        
+        std::lock_guard<std::mutex> lock(ready_list_mutex);
+        if (cpu0.running) {
+            // CPU正在运行进程
+            if (cpu0.running_process != nullptr) {
+                cpu0s.current_instruction = cpu0.running_process->instruction;
+                cpu0s.remaining_time = cpu0.running_process->current_instruction_time;
+                cpu0s.running_pid = cpu0.running_process->pid;
+            } else {
+                cpu0s.current_instruction = "空闲";
+                cpu0s.remaining_time = 0;
+                cpu0s.running_pid = -1;
+            }
+        } else {
+            // CPU未运行或正在处理中断
+            if (!InterruptQueue.empty()) {
+                cpu0s.current_instruction = "处理中断";
+            } else {
+                cpu0s.current_instruction = "空闲";
+            }
+            cpu0s.remaining_time = 0;
+            cpu0s.running_pid = -1;
+        }
+        cpu_status.push_back(cpu0s);
+    }
+    
+    // 创建 CPU1 状态
+    {
+        CPUStatusForUI cpu1s;
+        cpu1s.cpu_id = 1;
+        
+        std::lock_guard<std::mutex> lock(ready_list_mutex);
+        if (cpu1.running) {
+            // CPU正在运行进程
+            if (cpu1.running_process != nullptr) {
+                cpu1s.current_instruction = cpu1.running_process->instruction;
+                cpu1s.remaining_time = cpu1.running_process->current_instruction_time;
+                cpu1s.running_pid = cpu1.running_process->pid;
+            } else {
+                cpu1s.current_instruction = "空闲";
+                cpu1s.remaining_time = 0;
+                cpu1s.running_pid = -1;
+            }
+        } else {
+            // CPU未运行或正在处理中断
+            if (!InterruptQueue.empty()) {
+                cpu1s.current_instruction = "处理中断";
+            } else {
+                cpu1s.current_instruction = "空闲";
+            }
+            cpu1s.remaining_time = 0;
+            cpu1s.running_pid = -1;
+        }
+        cpu_status.push_back(cpu1s);
+    }
+}
+std::string ProcessStatusManager::getProcessStateString(int state) {
+    switch (state) {
+        case CREATING: return "创建中";
+        case READY: return "就绪";
+        case RUNNING: return "运行中";
+        case BLOCK: return "阻塞";
+        case SUSPEND: return "挂起";
+        case DEAD: return "已终止";
+        default: return "未知状态";
+    }
+}
+
+void ProcessStatusManager::update() {
+    if (!need_update) {
+        return;
+    }
+    
+    updateOverview();
+    updateProcessTable();
+    updateCPUStatus();
+    
+    need_update = false;
+}
+
+const ProcessSystemStatusForUI& ProcessStatusManager::getCurrentStatus() const {
+    return current_status;
+}
+
+// 在需要发送状态时调用此函数
+std::string ProcessStatusManager::generateStatusJson() const {
+    // 这里需要实现JSON序列化
+    // 可以使用rapidjson或其他JSON库
+    return ""; // TODO: 实现JSON序列化
+}
+
+

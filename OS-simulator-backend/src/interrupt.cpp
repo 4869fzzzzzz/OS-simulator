@@ -17,6 +17,8 @@ std::thread th[2];
 std::atomic<int> interrupt_handling_cpus{0};  // 定义正在处理中断的CPU数量
 int scheduel;
 
+CPU cpu0(0),cpu1(1);
+
 void Interrupt_Init(){ //中断初始化
     //初始化中断有效位
     valid=0x0000|1<<static_cast<int>(InterruptType::TIMER)
@@ -872,75 +874,76 @@ void cpu_worker(CPU& cpu) {
 std::string InterruptSystemData::getInterruptTypeName(InterruptType type) {
     switch(type) {
         case InterruptType::TIMER: 
-            return "TIMER";
+            return "时钟中断";
         case InterruptType::DEVICE: 
-            return "DEVICE";
+            return "设备中断";
         case InterruptType::SOFTWARE: 
-            return "SOFTWARE";
+            return "软件中断";
         case InterruptType::SNAPSHOT: 
-            return "SNAPSHOT";
+            return "快照中断";
         case InterruptType::NON_MASKABLE: 
-            return "NON_MASKABLE";
+            return "不可屏蔽中断";
         case InterruptType::PAGEFAULT: 
-            return "PAGEFAULT";
+            return "缺页中断";
         case InterruptType::TEST: 
-            return "TEST";
+            return "测试中断";
         case InterruptType::MERROR: 
-            return "ERROR";
+            return "错误中断";
         default: 
-            return "UNKNOWN";
+            return "未知中断";
     }
 }
 
 // 处理函数名称转换
 std::string InterruptSystemData::getHandlerName(InterruptFunc handler) {
     if(handler == nullptr) 
-        return "NULL";
+        return "空处理器";
     if(handler == noHandle) 
-        return "noHandle";
+        return "无操作处理器";
     if(handler == errorHandle) 
-        return "errorHandle";
+        return "错误处理器";
     if(handler == Pagefault) 
-        return "PageFaultHandler";
+        return "缺页处理器";
     if(handler == snapshotSend) 
-        return "SnapshotHandler";
-    return "UnknownHandler";
+        return "状态快照处理器";
+    if(handler == callDeviceInterrupt) 
+        return "设备中断处理器";
+    return "未知处理器";
 }
 
 // 设备类型转换
 std::string InterruptSystemData::getDeviceType(int device_id) {
-    // 根据设备ID返回对应的设备类型字符串
-    switch(device_id) {
-        case 0: 
-            return "KEYBOARD";
-        case 1: 
-            return "MOUSE";
-        case 2: 
-            return "PRINTER";
-        case 3: 
-            return "DISK";
+    switch(static_cast<DeviceType>(device_id)) {
+        case DeviceType::Disk: 
+            return "磁盘";
+        case DeviceType::Printer: 
+            return "打印机";
+        case DeviceType::Keyboard: 
+            return "键盘";
+        case DeviceType::NetworkCard: 
+            return "网卡";
+        case DeviceType::Other: 
+            return "其他设备";
         default: 
-            return "UNKNOWN_DEVICE";
+            return "未知设备";
     }
 }
 
-// 计算总中断数
+// 中断计数相关函数
 int InterruptSystemData::calculateTotalInterrupts() {
     static std::atomic<int> total_interrupts{0};
-    return total_interrupts.load();
+    return total_interrupts.load(std::memory_order_relaxed);
 }
 
-// 获取特定类型中断的触发次数
 int InterruptSystemData::getTriggerCount(InterruptType type) {
     static std::map<InterruptType, std::atomic<int>> trigger_counts;
-    return trigger_counts[type].load();
+    return trigger_counts[type].load(std::memory_order_relaxed);
 }
 
-// 添加计数函数 - 在 raiseInterrupt 函数中调用
 void incrementInterruptCount(InterruptType type) {
     static std::map<InterruptType, std::atomic<int>> trigger_counts;
     static std::atomic<int> total_interrupts{0};
     
-    trigger_counts[type]++;
-    total_interrupts++;
+    trigger_counts[type].fetch_add(1, std::memory_order_relaxed);
+    total_interrupts.fetch_add(1, std::memory_order_relaxed);
 }

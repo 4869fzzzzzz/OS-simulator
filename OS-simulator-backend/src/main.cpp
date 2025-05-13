@@ -35,7 +35,7 @@ int main(){
     tcmd.push("")
     handleClientCmd();*/
 #endif 
-    CPU cpu0(0),cpu1(1);
+    
     PCB npcb;
     Interrupt_Init(); 
     std::thread cpu0_thread(cpu_worker, std::ref(cpu0));//短期调度在该线程内执行
