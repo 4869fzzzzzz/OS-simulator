@@ -15,17 +15,16 @@ typedef unsigned int page;        // 页面号
 
 static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_t大小与指针不一致");
 
-#define PAGE_TABLE_SIZE 128       // 页表最大项数
+#define PAGE_TABLE_SIZE 20       // 页表最大项数
 #define V_PAGE_USE_SIZE 20        // 虚拟页数量
-#define PAGE_SIZE 4096            // 单个页面大小（4KB）
+#define PAGE_SIZE 1024            // 单个页面大小（1KB）
 #define P_PAGE_USE_SIZE 9         // 物理页数量
-#define USE_RECORD_SIZE 16        // 内存使用记录项数
 #define FULL (1 << 24) - 1        // 表示未分配状态的标志
 #define MEMORY_SIZE (P_PAGE_USE_SIZE * PAGE_SIZE) // 物理内存大小
 #define page_bit unsigned char    // 页标志位
-#define DISK_SIZE (1024 * 1024)   // 模拟磁盘大小
-#define DEVICE_BUFFER_START (MEMORY_SIZE - 0) // 设备缓冲区起始地址 待定
-#define DEVICE_BUFFER_SIZE 0   // 设备缓冲区大小 待定
+#define DISK_SIZE (1024 * 10)   // 模拟磁盘大小 10 kb
+#define DEVICE_BUFFER_SIZE (2 * PAGE_SIZE)  // 设备缓冲区大小：2个页面（2KB）
+#define DEVICE_BUFFER_START (V_PAGE_USE_SIZE * PAGE_SIZE) // 设备缓冲区起始地址
 
 //页表项
 struct PageTableItem {
@@ -54,11 +53,12 @@ extern page_bit v_page[V_PAGE_USE_SIZE];         // 虚拟页面使用情况 1�
 extern page_bit p_page[P_PAGE_USE_SIZE];         // 物理页面使用情况
 extern Frame* clock_hand;                        // Clock 置换算法的指针
 extern atom_data memory[MEMORY_SIZE];            // 物理内存
-extern atom_data disk[DISK_SIZE];         
+extern atom_data disk[DISK_SIZE];
+extern atom_data device_buffer[DEVICE_BUFFER_SIZE];      
 
 class MemoryOverview {
 public:
-    size_t page_size;            // 页面大小（4KB）
+    size_t page_size;            // 页面大小
     size_t total_physical_mem;   // 物理内存总大小（字节）
     size_t used_physical_mem;    // 已使用物理内存（字节）
     size_t free_physical_mem;    // 可用物理内存（字节）
