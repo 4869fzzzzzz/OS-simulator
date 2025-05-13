@@ -6,9 +6,16 @@
 #include "../include/device.h"
 
 
+
+//待办
+//1.添加创建目录操作，删除目录操作
+//2.添加传输消息格式，给前端传输文件方法
+
+
 int main(){
     SetConsoleOutputCP(CP_UTF8);
     //socket初始化
+    init_memory();
 #if SOCKETBEGIN
     
     /*if (!serverSocket.isValid()) {

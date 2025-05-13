@@ -623,7 +623,7 @@ void MidStageScheduler()
         PCB& p = blockList.front();
         blockList.pop_front();
         if(p.blocktype==SYSTEMB){
-            if(page_out(p.address,p.pid)){
+            if(page_in(p.address,p.pid)){
                 p.state = SUSPEND;
                 suspend(p);
                 cout << "进程 " << p.pid << " 被挂起" << endl;
