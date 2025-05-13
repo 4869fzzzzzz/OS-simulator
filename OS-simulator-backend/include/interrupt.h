@@ -129,7 +129,7 @@ void CmdSplit(const std::string& cmd,std::vector<std::string>& scmd);//划分指
 bool handleClientCmd(std::string cmd, std::string& result);
 void cpu_worker(CPU& cpu);
 
-void incrementInterruptCount(InterruptType type);
+
 
 
 //UI数据交换
@@ -180,6 +180,16 @@ class InterruptSystemData {
         std::vector<InterruptQueueItem> interrupt_queue;
     
         AIGC_JSON_HELPER(overview, vector_table, interrupt_queue)
+        // 声明静态成员变量
+        static std::atomic<int>& getTotalInterrupts() {
+            static std::atomic<int> total_interrupts{0};
+            return total_interrupts;
+        }
+        
+        static std::map<InterruptType, std::atomic<int>>& getTriggerCounts() {
+            static std::map<InterruptType, std::atomic<int>> trigger_counts;
+            return trigger_counts;
+        }
     
         // 更新数据方法
         void update() {
@@ -220,12 +230,22 @@ class InterruptSystemData {
             }
         }
     
-    private:
+    
         std::string getInterruptTypeName(InterruptType type);
         std::string getHandlerName(InterruptFunc handler);
         std::string getDeviceType(int device_id);
-        int calculateTotalInterrupts();
-        int getTriggerCount(InterruptType type);
+        int calculateTotalInterrupts() {
+            return getTotalInterrupts().load(std::memory_order_relaxed);
+        }
+        
+        int getTriggerCount(InterruptType type) {
+            return getTriggerCounts()[type].load(std::memory_order_relaxed);
+        }
+        
+        static void incrementCount(InterruptType type) {
+            getTriggerCounts()[type].fetch_add(1, std::memory_order_relaxed);
+            getTotalInterrupts().fetch_add(1, std::memory_order_relaxed);
+        }
 };
 
 class SystemSnapshot {
@@ -233,8 +253,11 @@ public:
     TimerData timer;
     ProcessSystemStatusForUI process;
     InterruptSystemData interrupt;
+    MemoryStatusForUI memory;
+    FilesystemStructureForUI file;
+    DeviceSystemStatusForUI device;
 
-    AIGC_JSON_HELPER(timer, process, interrupt)
-    AIGC_JSON_HELPER_RENAME("timer", "process", "interrupt")
+    AIGC_JSON_HELPER(timer, process, interrupt, memory, file, device)
+    AIGC_JSON_HELPER_RENAME("timer", "process", "interrupt", "memory", "file", "device")
 };
 void snapshotSend(int v1,int v2,std::string v3,int* v4, int v5);

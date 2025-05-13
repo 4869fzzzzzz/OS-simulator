@@ -11,15 +11,26 @@
 
 DeviceManager manager;
 
+void Init_Device(){
+    createDevices(manager);
+}
+
 // 创建所有设备
 void createDevices(DeviceManager& manager) {
     manager.createDevice(DeviceType::Disk, "磁盘1");
+    alloc_for_device(1,64);
     manager.createDevice(DeviceType::Disk, "磁盘2");
+    alloc_for_device(2,64);
     manager.createDevice(DeviceType::Disk, "磁盘3");
+    alloc_for_device(3,64);
     manager.createDevice(DeviceType::Printer, "打印机1");
+    alloc_for_device(4,64);
     manager.createDevice(DeviceType::Printer, "打印机2");
+    alloc_for_device(5,64);
     manager.createDevice(DeviceType::Keyboard, "键盘1");
+    alloc_for_device(6,64);
     manager.createDevice(DeviceType::NetworkCard, "网卡1");
+    alloc_for_device(7,64);
     manager.createDevice(DeviceType::Other, "其他设备1");
 }
 
