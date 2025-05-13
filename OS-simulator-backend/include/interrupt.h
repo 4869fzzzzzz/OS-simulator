@@ -118,9 +118,9 @@ struct CPU {
     bool busy;                  // CPU 状态
     PCB* running_process;       // 当前运行的进程
     std::atomic<bool> running;  // CPU 运行状态
-    long long running_time;
+    //long long running_time;
     
-    CPU(int cpu_id) : id(cpu_id), busy(false), running_process(nullptr), running(false), running_time(0) {}
+    CPU(int cpu_id) : id(cpu_id), busy(false), running_process(nullptr), running(false) {}
 
 };
 extern CPU cpu0,cpu1;

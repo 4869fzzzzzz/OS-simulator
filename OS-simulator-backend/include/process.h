@@ -175,10 +175,10 @@ struct CPUStatusForUI {
     std::string current_instruction;
     int remaining_time;
     int running_pid;
-    int running_time;
+    //int running_time;
 
-    AIGC_JSON_HELPER(cpu_id, current_instruction, remaining_time, running_pid, running_time)
-    AIGC_JSON_HELPER_RENAME("id", "instruction", "remaining", "pid", "running_time")
+    AIGC_JSON_HELPER(cpu_id, current_instruction, remaining_time, running_pid)
+    AIGC_JSON_HELPER_RENAME("id", "instruction", "remaining", "pid")
 
 };
 
