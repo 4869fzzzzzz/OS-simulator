@@ -15,16 +15,17 @@ typedef unsigned int page;        // 页面号
 
 static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_t大小与指针不一致");
 
-#define PAGE_TABLE_SIZE 20       // 页表最大项数
+#define PAGE_TABLE_SIZE 128       // 页表最大项数
 #define V_PAGE_USE_SIZE 20        // 虚拟页数量
-#define PAGE_SIZE 1024            // 单个页面大小（1KB）
+#define PAGE_SIZE 4096            // 单个页面大小（4KB）
 #define P_PAGE_USE_SIZE 9         // 物理页数量
+#define USE_RECORD_SIZE 16        // 内存使用记录项数
 #define FULL (1 << 24) - 1        // 表示未分配状态的标志
 #define MEMORY_SIZE (P_PAGE_USE_SIZE * PAGE_SIZE) // 物理内存大小
 #define page_bit unsigned char    // 页标志位
-#define DISK_SIZE (1024 * 10)   // 模拟磁盘大小 10 kb
-#define DEVICE_BUFFER_SIZE (2 * PAGE_SIZE)  // 设备缓冲区大小：2个页面（2KB）
-#define DEVICE_BUFFER_START (V_PAGE_USE_SIZE * PAGE_SIZE) // 设备缓冲区起始地址
+#define DISK_SIZE (1024 * 1024)   // 模拟磁盘大小
+#define DEVICE_BUFFER_START (MEMORY_SIZE - 0) // 设备缓冲区起始地址 待定
+#define DEVICE_BUFFER_SIZE 0   // 设备缓冲区大小 待定
 
 //页表项
 struct PageTableItem {
