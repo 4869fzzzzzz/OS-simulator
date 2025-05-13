@@ -960,9 +960,9 @@ void snapshotSend(int v1, int v2, std::string v3, int* v4, int v5) {
         fillFilesystemStructure(snapshot.file,fs);
 
         // 6. 更新设备状态
-        static DeviceStatusManager deviceStatus;
+        /*static DeviceStatusManager deviceStatus;
         deviceStatus.update();
-        snapshot.device = deviceStatus.getCurrentStatus();
+        snapshot.device = deviceStatus.getCurrentStatus();*/
         
         // 7. 使用 AIGC 序列化整个快照对象
         std::string json_obj;

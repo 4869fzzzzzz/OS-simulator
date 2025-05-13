@@ -256,9 +256,9 @@ public:
     InterruptSystemData interrupt;
     MemoryStatusForUI memory;
     FilesystemStructureForUI file;
-    DeviceSystemStatusForUI device;
+    
 
-    AIGC_JSON_HELPER(timer, process, interrupt, memory, file, device)
+    AIGC_JSON_HELPER(timer, process, interrupt, memory, file)
     AIGC_JSON_HELPER_RENAME("timer", "process", "interrupt", "memory", "file", "device")
 };
 void snapshotSend(int v1,int v2,std::string v3,int* v4, int v5);
