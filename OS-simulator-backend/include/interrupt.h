@@ -220,9 +220,9 @@ class InterruptSystemData {
         std::vector<InterruptVectorItem> vector_table;
         
         // 中断处理队列
-        std::vector<InterruptQueueItem> interrupt_queue;
+        std::vector<InterruptQueueItem> interrupt_queue_my;
     
-        AIGC_JSON_HELPER(overview, vector_table, interrupt_queue)
+        AIGC_JSON_HELPER(overview, vector_table, interrupt_queue_my)
         // 声明静态成员变量
         static std::atomic<int>& getTotalInterrupts() {
             static std::atomic<int> total_interrupts{0};
@@ -235,7 +235,7 @@ class InterruptSystemData {
         }
     
         // 更新数据方法
-        void update() {
+        /*void update() {
             // 更新总览信息
             overview.timer_enabled = timerInterruptValid.load();
             overview.timer_interval = Normal_Timer_Interval;
@@ -257,21 +257,44 @@ class InterruptSystemData {
             }
     
             // 更新中断队列
-            interrupt_queue.clear();
+            interrupt_queue_my.clear();
+            
+            
+                std::lock_guard<std::mutex> lock(iq);
+                if (InterruptQueue.empty()) {
+                    return;
+                }
+                
+                // 仅获取队列的大小和前端元素，不修改队列
+                size_t queueSize = InterruptQueue.size();
+                interrupt_queue_my.reserve(queueSize);
+                
+                // 创建临时数组存储中断信息
+                std::vector<std::tuple<InterruptType, int, long long>> tempData;
+                tempData.reserve(queueSize);
+                
+                // 临时队列仅用于读取数据
+                auto tempQueue = InterruptQueue;
+                while (!tempQueue.empty()) {
+                    const auto& interrupt = tempQueue.top();
+                    tempData.emplace_back(interrupt.type, interrupt.value1, interrupt.timecount);
+                    tempQueue.pop();
+                }
+             // 立即释放锁
+             iq.unlock();
+            
+            // 在锁外处理数据
             int index = 0;
-            std::lock_guard<std::mutex> lock(iq);
-            auto tempQueue = InterruptQueue;
-            while (!tempQueue.empty()) {
-                auto interrupt = tempQueue.top();
-                InterruptQueueItem item;
-                item.index = index++;
-                item.type = getInterruptTypeName(interrupt.type);
-                item.device = getDeviceType(interrupt.value1);
-                item.raise_time = interrupt.timecount;
-                interrupt_queue.push_back(item);
-                tempQueue.pop();
+            for (const auto& [type, deviceId, timestamp] : tempData) {
+                InterruptQueueItem item{
+                    index++,
+                    getInterruptTypeName(type),
+                    getDeviceType(deviceId),
+                    timestamp
+                };
+                interrupt_queue_my.emplace_back(std::move(item));
             }
-        }
+        }*/
     
     
         std::string getInterruptTypeName(InterruptType type);
@@ -303,11 +326,11 @@ public:
     TimerData timer;
     ProcessSystemStatusForUI process;
     InterruptSystemData interrupt;
-    MemoryStatusForUI memory;
-    FilesystemStructureForUI file;
+    //MemoryStatusForUI memory;
+    //FilesystemStructureForUI file;
     
 
-    AIGC_JSON_HELPER(timer, process, interrupt, memory, file)
-    AIGC_JSON_HELPER_RENAME("timer", "process", "interrupt", "memory", "file", "device")
+    AIGC_JSON_HELPER(timer, process, interrupt)
+    AIGC_JSON_HELPER_RENAME("timer", "process", "interrupt")
 };
 void snapshotSend(int v1,int v2,std::string v3,int* v4, int v5);

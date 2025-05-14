@@ -98,12 +98,13 @@ typedef struct process_struct {
 	int apply_time;
 	int current_instruction_time;
 
-	string instruction;//程序段顺序执行命令
+	std::string instruction;//程序段顺序执行命令
 
 	bool operator==(const process_struct& other) const {
 		return pid == other.pid; // 假设 PID 是唯一的标识
 	}
 	bool has_instruction(){
+        std::cout<<instruction.size()<<std::endl;
 		if(instruction.empty())
 			return false;
 		else

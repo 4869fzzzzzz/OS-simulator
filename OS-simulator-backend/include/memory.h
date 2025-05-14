@@ -2,7 +2,7 @@
 #define MEMORY_H
 
 #include <iostream>
-#include <cstring>
+
 #include <vector>
 #include "AIGCJson.hpp"
 
@@ -17,7 +17,7 @@ static_assert(sizeof(uintptr_t) == sizeof(void*), "uintptr_t大小与指针不�
 
 #define PAGE_TABLE_SIZE 128       // 页表最大项数
 #define V_PAGE_USE_SIZE 20        // 虚拟页数量
-#define PAGE_SIZE 4096            // 单个页面大小（4KB）
+#define PAGE_SIZE 1024            // 单个页面大小（4KB）
 #define P_PAGE_USE_SIZE 9         // 物理页数量
 #define USE_RECORD_SIZE 16        // 内存使用记录项数
 #define FULL (1 << 24) - 1        // 表示未分配状态的标志

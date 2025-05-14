@@ -60,7 +60,7 @@ void removePCBFromQueue(PCB* current_pcb) {
     case READY:
     {
         // 查找并从对应队列中移除
-        ready_list_mutex.lock();
+        std::lock_guard<std::mutex> lock(ready_list_mutex);
         if (current_pcb->pid != -1) { // 如果pid不为-1（表示有效进程）
             auto it = std::find_if(readyList0.begin(), readyList0.end(),
                 [current_pcb](PCB& p) { return p.pid == current_pcb->pid; });
@@ -243,7 +243,7 @@ void waitForPrint() {
 void ready(PCB& p) {
     p.state = READY;
 
-    ready_list_mutex.lock();
+    std::lock_guard<std::mutex> lock(ready_list_mutex);
     if (readyList0.size() <= readyList1.size()) {
         readyList0.push_back(p);
         p.cpu_num = 0;
@@ -265,7 +265,7 @@ void block(PCB& p) {
     blockList.push_back(p);
     blockList_mutex.unlock();
     // 从就绪队列中移除
-    ready_list_mutex.lock();
+    std::lock_guard<std::mutex> lock(ready_list_mutex);
     for (auto it = readyList0.begin(); it != readyList0.end(); ++it) {
         if (it->pid == p.pid) {
             readyList0.erase(it);
@@ -373,35 +373,54 @@ ProcessInfo parseFileContent(const string& content) {
 // 创建PCB
 PCB create(const string& path, const string& filename) {
     PCB p;
-    p.pid = pid_num;           // 随机生成PID
-    pid_num++;
-    p.priority = rand() % 10;            // 设置优先级
-    p.state = CREATING;       // 初始状态为创建
-    p.cpuState = 0;           // 默认特权状态
-    p.blocktype = NOTBLOCK;   // 未阻塞
-
-    std::string content = fs.readFile(path, filename);
-
+    
+    // 基本信息
+    p.pid = pid_num++;
+    p.state = CREATING;
+    p.cpuState = 0;            // 默认用户态
+    p.priority = rand() % 10;  // 随机优先级 0-9
     p.cpu_num = -1;           // 未分配CPU
-    p.task_size = content.size();          // 设置内存块数
-    p.is_apply = false;       // 未分配内存
-    p.address = FULL;                // 虚拟地址待分配
-    p.next_v = 0;         // 读取位置初始化
-    p.position = path + "/" + filename; // 保存完整文件路径
-
+    
+    // 时间相关
     p.cputime = 0;
     p.cpuStartTime = -1;
     p.keyboardStartTime = -1;
     p.printStartTime = -1;
     p.filewriteStartTime = -1;
     p.createtime = time_cnt.load();
-    p.RR = 0;
-
+    p.suspend_time = -1;
+    p.RR = 0.0;
+    
+    // 阻塞相关
+    p.blocktype = NOTBLOCK;
+    p.start_block_time = 0;
+    p.need_block_time = 0;
+    p.apply_time = 0;
+    
+    // 文件相关
+    p.fs = "";
+    p.fsState = "";
+    p.content = "";
+    p.position = path + "/" + filename;
+    
+    // 读取文件内容
+    string content = fs.readFile(path,filename);
+    
+    // 内存相关
+    p.task_size = content.size();
+    p.is_apply = false;
+    p.address = FULL;
+    p.next_v = 0;
+    
+    // 指令相关
+    p.instruction = "";
+    p.current_instruction_time = 0;
+    
     return p;
 }
 
 
-int read_instruction(string& instruction, m_pid pid) {
+/*int read_instruction(string& instruction, m_pid pid) {
     instruction.clear(); // 清空输出字符串
 
     // 通过 pid 查找对应的 PCB
@@ -459,7 +478,7 @@ int read_instruction(string& instruction, m_pid pid) {
 
     return 1; // 成功读取
 }
-
+*/
 void CreatePCB()
 {
     while(!prePCBList.empty()&&PCBList.size() < MAX_PCB_SIZE&&suspendList.size() < MAX_SPCB_SIZE){
@@ -467,7 +486,9 @@ void CreatePCB()
         //创建pcb
         PCB newProcess = create(prePCBList.front().path, prePCBList.front().filename);
         //分配虚拟地址空间
-        alloc_for_process(newProcess.pid, newProcess.task_size);
+        cout<<"所需空间大小"<<newProcess.task_size<<endl;
+        newProcess.address=alloc_for_process(newProcess.pid, newProcess.task_size);
+        cout<<newProcess.address<<endl;
         PCBList.push_back(newProcess);
         suspendList_mutex.lock();
         suspendList.push_back(newProcess);
@@ -480,11 +501,13 @@ void CreatePCB()
 void AllocateMemoryForPCB()
 {
     while (!suspendList.empty()) {
+        cout<<"尝试给挂起队列进程分配内存"<<endl;
         suspendList_mutex.lock();
-        PCB& p = suspendList.front();
+        PCB p = suspendList.front();
         suspendList.pop_front();
         if(p.state==CREATING){
-            if(page_in(p.address,p.pid)){
+            cout<<p.address<<endl;
+            if(page_in(p.address,p.pid)==0){
                 std::cout << "进程 " << p.pid << " 分配内存成功" << std::endl;
                 p.state = READY;
                 ready(p);
@@ -493,6 +516,9 @@ void AllocateMemoryForPCB()
                 std::cout << "进程 " << p.pid << " 分配内存失败" << std::endl;
                 suspendList.push_back(p);
             }
+        }
+        else{
+            suspendList.push_back(p);
         }
         suspendList_mutex.unlock();
     }
@@ -602,10 +628,10 @@ void MidStageScheduler()
 }
 
 void shortScheduler() {
-    ready_list_mutex.lock();
+    std::lock_guard<std::mutex> lock(ready_list_mutex);
 
     // 1. 平衡队列 - 如果队列0的进程数比队列1多，移动一个最低优先级的进程到队列1
-    if (readyList0.size() > readyList1.size()) {
+    /*if (readyList0.size() > readyList1.size()+3) {
         // 找到队列0中优先级最低的进程
         auto min_priority_it = std::min_element(readyList0.begin(), readyList0.end(),
             [](const PCB& a, const PCB& b) {
@@ -620,7 +646,7 @@ void shortScheduler() {
             readyList1.push_back(process);
             std::cout << "将进程 " << process.pid << " 从CPU0队列移动到CPU1队列以平衡负载" << std::endl;
         }
-    }
+    }*/
 
     // 2. 对队列0进行优先级排序（优先级高的在前）
     readyList0.sort([](const PCB& a, const PCB& b) {
@@ -628,7 +654,7 @@ void shortScheduler() {
     });
 
     // 3. 对队列1进行响应比排序
-    updateRRAndSortByRR(readyList1);
+    //updateRRAndSortByRR(readyList1);
 
     // 打印调度结果
     /*std::cout << "\n===== 调度结果 =====" << std::endl;
@@ -642,7 +668,7 @@ void shortScheduler() {
         std::cout << "进程" << p.pid << " 响应比:" << p.RR << std::endl;
     }*/
 
-    ready_list_mutex.unlock();
+    
 }
 
 

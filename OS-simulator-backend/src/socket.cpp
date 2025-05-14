@@ -130,8 +130,8 @@ void MySocket::Close()
 
 
 
-void RecvThread(){
-	MySocket serverSocket;
+void RecvThread(MySocket &serverSocket){
+	
 	clientSocket = serverSocket.Accept();
     SOCKADDR_IN client_addr = serverSocket.client_addr;
 	while(1){

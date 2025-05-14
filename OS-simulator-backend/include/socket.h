@@ -47,4 +47,4 @@ public:
 };
 
 //extern MySocket serverSocket;
-void RecvThread();
+void RecvThread(MySocket &serverSocket);
