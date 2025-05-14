@@ -824,8 +824,12 @@ void cpu_worker(CPU& cpu) {
                         std::lock_guard<std::mutex> lock(blockList_mutex);
                         blockList.push_back(*current_pcb);
                         blockList_mutex.unlock();   
+                        pcb_exist_flag=0;
                     }
-                    pcb_exist_flag=0;
+                    else{
+                        current_pcb->current_instruction_time=0;
+                        current_pcb->instruction="";    
+                    }
                 } else {
                     current_pcb->current_instruction_time--;
                 }
@@ -884,7 +888,7 @@ void cpu_worker(CPU& cpu) {
                 current_pcb = nullptr;
                 ready_list_mutex.unlock();
             }else{
-                cout<<"pcb被删除"<<endl;
+                cout<<"pcb被删除或移出"<<endl;
                 delete current_pcb;
                 current_pcb = nullptr;
             }
