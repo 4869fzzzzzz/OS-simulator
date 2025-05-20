@@ -6,7 +6,7 @@
 #include <thread>   // std::this_thread::sleep_for
 #include <chrono>   // std::chrono::seconds
 #include "../include/device.h"
-
+#include "../include/interrupt.h"
 
 
 DeviceManager manager;
@@ -15,44 +15,62 @@ void Init_Device(){
     createDevices(manager);
 }
 
-// ´´½¨ËùÓĞÉè±¸
+// åˆ›å»ºæ‰€æœ‰è®¾å¤‡
 void createDevices(DeviceManager& manager) {
-    manager.createDevice(DeviceType::Disk, "´ÅÅÌ1");
+    manager.createDevice(DeviceType::Disk, "ç£ç›˜1");
     alloc_for_device(1,64);
-    manager.createDevice(DeviceType::Disk, "´ÅÅÌ2");
+    manager.createDevice(DeviceType::Disk, "ç£ç›˜2");
     alloc_for_device(2,64);
-    manager.createDevice(DeviceType::Disk, "´ÅÅÌ3");
+    manager.createDevice(DeviceType::Disk, "ç£ç›˜3");
     alloc_for_device(3,64);
-    manager.createDevice(DeviceType::Printer, "´òÓ¡»ú1");
+    manager.createDevice(DeviceType::Printer, "æ‰“å°æœº1");
     alloc_for_device(4,64);
-    manager.createDevice(DeviceType::Printer, "´òÓ¡»ú2");
+    manager.createDevice(DeviceType::Printer, "æ‰“å°æœº2");
     alloc_for_device(5,64);
-    manager.createDevice(DeviceType::Keyboard, "¼üÅÌ1");
+    manager.createDevice(DeviceType::Keyboard, "é”®ç›˜1");
     alloc_for_device(6,64);
-    manager.createDevice(DeviceType::NetworkCard, "Íø¿¨1");
+    manager.createDevice(DeviceType::NetworkCard, "ç½‘å¡1");
     alloc_for_device(7,64);
-    manager.createDevice(DeviceType::Other, "ÆäËûÉè±¸1");
+    manager.createDevice(DeviceType::Other, "å…¶ä»–è®¾å¤‡1");
 }
 
-// µ÷ÓÃÖĞ¶ÏÇëÇóÉè±¸--starttimeÎªpidµÄ×èÈû¿ªÊ¼Ê±¼ä£¬Èç¹ûÏµÍ³³É¹¦·ÖÅäÁËÉè±¸£¬Ôò·µ»Øµ±Ç°Ê±¼ä£¬Ã»ÓĞ·µ»Ø-1
+// è°ƒç”¨ä¸­æ–­è¯·æ±‚è®¾å¤‡--starttimeä¸ºpidçš„é˜»å¡å¼€å§‹æ—¶é—´ï¼Œå¦‚æœç³»ç»ŸæˆåŠŸåˆ†é…äº†è®¾å¤‡ï¼Œåˆ™è¿”å›å½“å‰æ—¶é—´ï¼Œæ²¡æœ‰è¿”å›-1
 void callDeviceInterrupt(int pcb_id, int type, std::string info,int* starttime, int seconds) {
-    auto device = manager.findAvailableDevice(static_cast<DeviceType>(type));
-    if (device) {
-        device->enable();
-        std::cout << "PCB " << pcb_id << " ÇëÇóÉè±¸: " << device->getName()
-            << "£¬ÆôÓÃÖĞ...£¨" << seconds << "Ãë£©" << std::endl;
-
-        std::thread([device, seconds]() {
-            std::this_thread::sleep_for(std::chrono::seconds(seconds));
-            device->disable();
-            device->clearInterrupt();
-            }).detach();
-
-            std::cout << "·µ»Ø£ºtrue£¬Éè±¸ID = " << device->getId() << std::endl;
-            *starttime = time_cnt.load();
+    if(type==8){
+        std::lock_guard<std::mutex> lock(blockList_mutex);
+        for (auto it = blockList.begin(); it != blockList.end();it++) {
+            PCB& P=*it;    
+            if(P.pid==pcb_id){
+                P.start_block_time=1;//è®¾å¤‡ä½¿ç”¨ç»“æŸ
+            }
+        }
+        blockList_mutex.unlock();
+        return;
     }
-    std::cout << "·µ»Ø£ºfalse£¬wrong£¨Ã»ÓĞ¿ÉÓÃµÄ¸ÃÀàĞÍÉè±¸£©" << std::endl;
-    *starttime = -1;
+    else{
+        auto device = manager.findAvailableDevice(static_cast<DeviceType>(type));
+        if (device) {
+            device->enable();
+            device->setUsingPid(pcb_id);
+            std::cout << "PCB " << pcb_id << " è¯·æ±‚è®¾å¤‡: " << device->getName()
+                << "ï¼Œå¯ç”¨ä¸­...ï¼ˆ" << seconds << "ç§’ï¼‰" << std::endl;
+
+            std::thread([device, seconds]() {
+                std::this_thread::sleep_for(std::chrono::seconds(seconds));
+                device->disable();
+                device->clearInterrupt();
+                raiseInterrupt(InterruptType::DEVICE, device->getId(), 8, "", nullptr, 0);
+                }).detach();
+
+                std::cout << "è¿”å›ï¼štrueï¼Œè®¾å¤‡ID = " << device->getId() << std::endl;
+                cout<<"è®¾å¤‡è¿”å›åˆ°å¯åŠ¨æ—¶é—´ï¼š"<<*starttime<<endl;
+        }
+        else
+        {
+            std::cout << "è¿”å›ï¼šfalseï¼Œwrongï¼ˆæ²¡æœ‰å¯ç”¨çš„è¯¥ç±»å‹è®¾å¤‡ï¼‰" << std::endl;
+            *starttime = -1;
+        }
+    }
 }
 
 /*int main() {
@@ -61,16 +79,16 @@ void callDeviceInterrupt(int pcb_id, int type, std::string info,int* starttime, 
     createDevices(manager);
     manager.printAllDevices();
 
-    std::cout << "\n==== Ä£Äâµ÷ÓÃÉè±¸ ====" << std::endl;
+    std::cout << "\n==== æ¨¡æ‹Ÿè°ƒç”¨è®¾å¤‡ ====" << std::endl;
 
-    // Ê¾Àı²âÊÔµ÷ÓÃ
+    // ç¤ºä¾‹æµ‹è¯•è°ƒç”¨
     callDeviceInterrupt(manager, 101, DeviceType::Disk, 3);
     callDeviceInterrupt(manager, 102, DeviceType::Disk, 4);
-    callDeviceInterrupt(manager, 103, DeviceType::Disk, 5); // »¹ÓĞÒ»¸ö´ÅÅÌ
-    callDeviceInterrupt(manager, 104, DeviceType::Disk, 2); // Ó¦¸ÃÊ§°Ü£¨ÎŞ¿ÕÏĞ£©
+    callDeviceInterrupt(manager, 103, DeviceType::Disk, 5); // è¿˜æœ‰ä¸€ä¸ªç£ç›˜
+    callDeviceInterrupt(manager, 104, DeviceType::Disk, 2); // åº”è¯¥å¤±è´¥ï¼ˆæ— ç©ºé—²ï¼‰
 
-    std::this_thread::sleep_for(std::chrono::seconds(6)); // µÈ´ıËùÓĞÉè±¸Íê³É
-    std::cout << "\n==== ×îÖÕÉè±¸×´Ì¬ ====" << std::endl;
+    std::this_thread::sleep_for(std::chrono::seconds(6)); // ç­‰å¾…æ‰€æœ‰è®¾å¤‡å®Œæˆ
+    std::cout << "\n==== æœ€ç»ˆè®¾å¤‡çŠ¶æ€ ====" << std::endl;
     manager.printAllDevices();
 
     return 0;

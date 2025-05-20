@@ -127,14 +127,15 @@ extern std::priority_queue<Interrupt, std::vector<Interrupt>, InterruptComparato
 //设置中断屏蔽函数
 
 class InterruptTool { //操作的中断的工具函数--注意仅可操作可屏蔽中断
-    bool isValid(InterruptType t); //判断某类型中断是否有效
-    bool setValid(InterruptType t); //设置中断有效
-    bool unsetValid(InterruptType t); //设置中断无效
-    bool allValid(); //打开所有可打开中断
-    bool setPriority(InterruptType t, int mpriority); //设置中断优先级
-    bool enableTimerInterrupt(); //时钟中断使能
-    bool disableTimerInterrupt(); //时钟中断失能
-    bool stopTimer(); //停止时钟线程-仅程序结束时使用
+public:
+    static bool isValid(InterruptType t); //判断某类型中断是否有效
+    static bool setValid(InterruptType t); //设置中断有效
+    static bool unsetValid(InterruptType t); //设置中断无效
+    static bool allValid(); //打开所有可打开中断
+    static bool setPriority(InterruptType t, int mpriority); //设置中断优先级
+    static bool enableTimerInterrupt(); //时钟中断使能
+    static bool disableTimerInterrupt(); //时钟中断失能
+    static bool stopTimer(); //停止时钟线程-仅程序结束时使用
 };
 
 //中断函数
@@ -167,7 +168,7 @@ struct CPU {
 };
 extern CPU cpu0,cpu1;
 
-bool RUN(std::string cmd,PCB* current_pcb);//运行一条指令
+bool RUN(std::string cmd,PCB* current_pcb,int* pcb_exit_flag);//运行一条指令
 void CmdSplit(const std::string& cmd,std::vector<std::string>& scmd);//划分指令
 bool handleClientCmd(std::string cmd, std::string& result);
 void cpu_worker(CPU& cpu);
@@ -235,7 +236,7 @@ class InterruptSystemData {
         }
     
         // 更新数据方法
-        /*void update() {
+        void update() {
             // 更新总览信息
             overview.timer_enabled = timerInterruptValid.load();
             overview.timer_interval = Normal_Timer_Interval;
@@ -294,7 +295,7 @@ class InterruptSystemData {
                 };
                 interrupt_queue_my.emplace_back(std::move(item));
             }
-        }*/
+        }
     
     
         std::string getInterruptTypeName(InterruptType type);
@@ -324,13 +325,13 @@ class InterruptSystemData {
 class SystemSnapshot {
 public:
     TimerData timer;
-    ProcessSystemStatusForUI process;
+    ProcessStatusManager process;
     InterruptSystemData interrupt;
     //MemoryStatusForUI memory;
-    //FilesystemStructureForUI file;
-    
+    DeviceSystemStatusForUI device;
+    FilesystemStatusForUI file;
 
-    AIGC_JSON_HELPER(timer, process, interrupt)
-    AIGC_JSON_HELPER_RENAME("timer", "process", "interrupt")
+    AIGC_JSON_HELPER(timer, process, interrupt,device,file)
+    AIGC_JSON_HELPER_RENAME("timer", "process", "interrupt","device","file")
 };
 void snapshotSend(int v1,int v2,std::string v3,int* v4, int v5);

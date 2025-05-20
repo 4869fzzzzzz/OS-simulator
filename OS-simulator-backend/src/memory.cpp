@@ -55,7 +55,8 @@ v_address alloc_for_process(m_pid pid, m_size size) {
     int pages_needed = (size + PAGE_SIZE - 1) / PAGE_SIZE; // 需要的页数
     int start_page = -1;
     int consecutive = 0;
-
+    std::cout << "[DEBUG] 请求分配: " << size << " bytes -> " 
+            << pages_needed << " pages" << std::endl;
     // 查找连续的空闲虚拟页
     for (int i = 0; i < V_PAGE_USE_SIZE; ++i) {
         if (!(v_page[i / 8] & (1 << (i % 8)))) { // 空闲页
@@ -117,6 +118,55 @@ int page_in(v_address v_addr, m_pid pid) {
     memcpy(&memory[p_page_num * PAGE_SIZE],
            &disk[v_page_num * PAGE_SIZE],
            PAGE_SIZE);
+           
+    // 如果是进程的代码段，需要从文件系统读取内容
+    if (pt.owner != FULL) {
+        // 查找进程控制块
+        PCB* pcb = nullptr;
+        for (auto& p : PCBList) {
+            if (p.pid == pt.owner) {
+                pcb = &p;
+                break;
+            }
+        }
+
+        if (pcb) {
+            try {
+                // 首先尝试从进程的instruction字段读取
+                if (!pcb->instruction.empty()) {
+                    size_t copy_size = std::min(pcb->instruction.size(), static_cast<size_t>(PAGE_SIZE));
+                    memcpy(&memory[p_page_num * PAGE_SIZE], pcb->instruction.c_str(), copy_size);
+                    std::cout << "[DEBUG] Copied " << copy_size << " bytes from process instruction to memory" << std::endl;
+                }
+                // 如果进程没有指令，尝试从文件系统读取
+                else if (!pcb->position.empty() && !pcb->fs.empty()) {
+                    string content = fs.readFile(pcb->position, pcb->fs);
+                    if (!content.empty()) {
+                        size_t copy_size = std::min(content.size(), static_cast<size_t>(PAGE_SIZE));
+                        memcpy(&memory[p_page_num * PAGE_SIZE], content.c_str(), copy_size);
+                        std::cout << "[DEBUG] Copied " << copy_size << " bytes from file " 
+                                 << pcb->fs << " to memory" << std::endl;
+                        // 更新进程的instruction字段
+                        pcb->instruction = content;
+                    } else {
+                        std::cerr << "[WARNING] Empty file content for process " << pt.owner << std::endl;
+                        memset(&memory[p_page_num * PAGE_SIZE], 0, PAGE_SIZE);
+                    }
+                } else {
+                    std::cerr << "[WARNING] No content to load for process " << pt.owner << std::endl;
+                    memset(&memory[p_page_num * PAGE_SIZE], 0, PAGE_SIZE);
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[ERROR] Failed to read content for process " << pt.owner 
+                         << ": " << e.what() << std::endl;
+                memset(&memory[p_page_num * PAGE_SIZE], 0, PAGE_SIZE);
+            }
+        } else {
+            std::cerr << "[ERROR] Process " << pt.owner << " not found" << std::endl;
+            memset(&memory[p_page_num * PAGE_SIZE], 0, PAGE_SIZE);
+        }
+    }
+    
     std::cout << "[DEBUG] Page in: Virtual page " << v_page_num << " -> Physical page " << p_page_num << std::endl;
     return 0;
 }
@@ -348,7 +398,7 @@ void free_file_memory(v_address addr, m_pid owner) {
 //地址转换
 int translate_address(v_address v_addr, m_pid pid, p_address* p_addr) {
     page v_page_num = v_addr / PAGE_SIZE;
-
+    cout<<"虚拟页号"<<v_page_num<<endl;
     // 检查虚拟页号是否在有效范围内
     if (v_page_num >= V_PAGE_USE_SIZE) {
         cerr << "[ERROR] Virtual page number out of range: " << v_page_num << std::endl;
@@ -395,68 +445,6 @@ void Pagefault(int pid, int v_addr, std::string info, int* data, int flag) {
         }
     }
 
-//0 成功读取一行指令;-1 缺页异常;-2 缺页异常
-/*int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr, m_pid pid, size_t* bytes_read) {
-        p_address p_addr;
-        int result = translate_address(v_addr, pid, &p_addr);
-    
-        if (result == -2) { // 缺页情况
-            std::cout << "[INFO] Page fault at address 0x" << std::hex << v_addr << std::dec << std::endl;
-    
-            // 调用 page_in 处理缺页
-            if (page_in(v_addr, pid) != 0) {
-                std::cerr << "[ERROR] Failed to resolve page fault for address 0x"
-                          << std::hex << v_addr << std::dec << std::endl;
-                
-                raiseInterrupt(InterruptType::PAGEFAULT, pid, v_addr, "Page fault during instruction read", nullptr, 0);
-                return -1;
-            }
-    
-            // 成功换入页面后重新翻译地址
-            result = translate_address(v_addr, pid, &p_addr);
-            if (result != 0) {
-                std::cerr << "[ERROR] Address translation failed after page in for 0x"
-                          << std::hex << v_addr << std::dec << std::endl;
-                return -1;
-            }
-           print_memory_usage();
-           return -1;
-        } else if (result != 0) { // 其他错误
-            std::cerr << "[ERROR] Failed to translate address 0x" << std::hex << v_addr << std::dec << std::endl;
-            print_memory_usage();
-            return -3;
-        }
-    
-        // 计算当前虚拟地址在物理内存中的偏移量
-        size_t available_in_page = PAGE_SIZE - (v_addr % PAGE_SIZE);
-        size_t bytes_to_read = std::min<size_t>(max_size - 1, available_in_page);
-    
-        // 从物理内存复制数据到缓冲区
-        memcpy(instruction_buffer, &memory[p_addr], bytes_to_read);
-    
-        // 查找换行符
-        char* newline_pos = static_cast<char*>(memchr(instruction_buffer, '\n', bytes_to_read));
-        print_memory_usage();
-        if (newline_pos) {
-            *newline_pos = '\0'; // 终止字符串
-            *bytes_read = newline_pos - instruction_buffer + 1; // 包含换行符
-            // 如果换行符刚好是最后一个字符，说明后面没有更多数据了
-            if ((v_addr + *bytes_read) >= (PAGE_SIZE * V_PAGE_USE_SIZE)) {
-                return -2; // 已达文件尾
-            }
-            return 0; // 成功读取一行
-        } else {
-            // 没有找到换行符
-            if (bytes_to_read == 0) {
-                *bytes_read = 0;
-                return -2; // 文件尾
-            } else {
-                *bytes_read = bytes_to_read;
-                return 0; // 未完成一行，需继续读取
-            }
-        }
-
-    }*/
 int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr, m_pid pid, size_t* bytes_read) {
     size_t total_read = 0;
     p_address p_addr;
@@ -500,6 +488,13 @@ int read_instruction(char* instruction_buffer, size_t max_size, v_address v_addr
 
         instruction_buffer[total_read] = c;
         total_read++;
+        /*
+        std::cout << "[DEBUG] read_instruction() p_addr: 0x" << std::hex << p_addr << std::dec << std::endl;
+        std::cout << "[DEBUG] First 16 bytes at p_addr: ";
+        for (int i = 0; i < 16 && total_read + i < max_size; ++i) {
+            std::cout << std::hex << static_cast<int>(memory[p_addr + i]) << " ";
+        }
+        std::cout << std::dec << std::endl;*/
 
         if (c == '\n') {
             break; // 找到换行符
@@ -637,522 +632,3 @@ void sendMemoryStatusToUI() {
     
     std::cout << "Generated JSON:\n" << jsonStr << std::endl;
 }
-
-
-void test_memory1() {
-    std::cout << "=== Testing Memory Management ===" << std::endl;
-    init_memory();
-
-    // 测试1：基本内存分配与释放
-    std::cout << "\n[Test 1] Basic allocation and free:" << std::endl;
-    m_pid pid1 = 1;
-    v_address addr1 = alloc_for_process(pid1, 8192);
-    std::cout << "Process 1 allocated at: " << addr1 / PAGE_SIZE << " (page number)" << std::endl;
-    free_process_memory(pid1);
-    std::cout << "Freed process 1 memory" << std::endl;
-    print_memory_usage();
-    
-
-    // 测试2：多进程内存分配
-    std::cout << "\n[Test 2] Multi-process allocation:" << std::endl;
-    m_pid pid2 = 2;
-    v_address addr2 = alloc_for_process(pid2, 16384);
-    std::cout << "Process 2 allocated at: " << addr2 / PAGE_SIZE << " (page number)" << std::endl;
-    m_pid pid3 = 3;
-    v_address addr3 = alloc_for_process(pid3, 8192);
-    std::cout << "Process 3 allocated at: " << addr3 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-
-    // 测试3：内存读写操作
-    std::cout << "\n[Test 3] Memory read/write operations:" << std::endl;
-    atom_data data;
-    write_memory(0xAA, addr2, pid2);
-    read_memory(&data, addr2, pid2);
-    std::cout << "Read from process 2: " << (int)data << std::endl;
-
-    /*// 测试4：设备内存分配
-    std::cout << "\n[Test 4] Device memory allocation:" << std::endl;
-    v_address dev_addr = alloc_for_device(1, 4096);
-    std::cout << "Device buffer allocated at: " << dev_addr / PAGE_SIZE << " (page number)" << std::endl;*/
-
-    // 测试5：文件内存分配与释放
-    std::cout << "\n[Test 5] File memory allocation:" << std::endl;
-    v_address file_addr;
-    if (alloc_for_file(8192, &file_addr) == 0) {
-        std::cout << "File memory allocated at: " << file_addr / PAGE_SIZE << " (page number)" << std::endl;
-        //free_file_memory(file_addr);
-        //std::cout << "Freed file memory" << std::endl;
-    }
-    print_memory_usage();
-    
-    // 测试6：页面置换 + 页面换入验证
-    std::cout << "\n[Test 6] Page replacement and page in verification:" << std::endl;
-
-    // 分配大量内存以触发页面置换
-    v_address addr4 = alloc_for_process(4, 4096);
-    std::cout << "Process 4 allocated at: " << addr4 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-    v_address addr5 = alloc_for_process(5, 4096);
-    std::cout << "Process 5 allocated at: " << addr5 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-    v_address addr6 = alloc_for_process(6, 4096);
-    std::cout << "Process 6 allocated at: " << addr6 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-    v_address addr7 = alloc_for_process(7, 4096);
-    std::cout << "Process 7 allocated at: " << addr7 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-    v_address addr8 = alloc_for_process(8, 8192);
-    std::cout << "Process 8 allocated at: " << addr8 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-    v_address addr9 = alloc_for_process(9, 8192);
-    std::cout << "Process 9 allocated at: " << addr9 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-    v_address addr10 = alloc_for_process(10, 8192);
-    std::cout << "Process 10 allocated at: " << addr10 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-    v_address addr11 = alloc_for_process(11, 4096);
-    std::cout << "Process 11 allocated at: " << addr11 / PAGE_SIZE << " (page number)" << std::endl;
-    print_memory_usage();
-
-
-    page_in(addr2,2);
-    read_memory(&data, addr2, pid2);
-    std::cout << "Read from process 2: " << (int)data << std::endl;
-    print_memory_usage();
-
-    /*// 向这些地址写入数据，确保会被换出到磁盘
-    std::string testData = "This is test data for page replacement and re-load from disk!";
-    for (size_t i = 0; i < testData.size(); ++i) {
-        write_memory(static_cast<atom_data>(testData[i]), addr4 + i, 4);
-    }
-    std::cout << "[DEBUG] Wrote test data to process 4's memory." << std::endl;
-
-    // 手动触发一次 page_in 操作来模拟缺页中断
-    std::cout << "[INFO] Simulating page fault for process 4..." << std::endl;
-    int result = page_in(addr4, 4); // 将虚拟地址对应的页面重新加载进内存
-
-    if (result == 0) {
-        std::cout << "[SUCCESS] Page in successful." << std::endl;
-
-    // 验证数据是否正确恢复
-    std::string recoveredData;
-    recoveredData.resize(testData.size());
-    for (size_t i = 0; i < testData.size(); ++i) {
-        atom_data data;
-        read_memory(&data, addr4 + i, 4);
-        recoveredData[i] = static_cast<char>(data);
-    }
-
-    std::cout << "[DEBUG] Recovered data: " << recoveredData << std::endl;
-    if (recoveredData == testData) {
-        std::cout << "[RESULT] Data integrity verified after page replacement. ✅" << std::endl;
-    } else {
-        std::cerr << "[ERROR] Data mismatch after page replacement! ❌" << std::endl;
-    }
-    } else {
-        std::cerr << "[ERROR] Failed to page in virtual address 0x" << std::hex << addr4 << std::endl;
-    } 
-
-    std::cout << "Page replacement and page-in verification complete." << std::endl;*/
-    
-    /*// 测试6：页面置换
-    std::cout << "\n[Test 6] Page replacement:" << std::endl;
-    // 分配大量内存以触发页面置换
-    for (int i = 0; i < 3; i++) {
-        alloc_for_process(4+i, 4096);
-        print_memory_usage();
-    }
-    std::cout << "Page replacement triggered" << std::endl;*/
-
-    // 测试7：内存状态报告
-    std::cout << "\n[Test 7] Memory status report:" << std::endl;
-    //sendMemoryStatusToUI();
-
-    // 清理
-    free_process_memory(pid2);
-    free_process_memory(pid3);
-    for (int i = 0; i < 100; i++) {
-        free_process_memory(4 + i);
-    }
-}
-
-void test_memory2() {
-    std::cout << "=== Enhanced Memory Management Test ===" << std::endl;
-    init_memory();
-    // 测试2：内存分配压力测试
-    std::cout << "\n[Test 2] Stress test with multiple processes:" << std::endl;
-    const int PROCESS_COUNT = 10;
-    vector<m_pid> pids;
-    for (int i = 0; i < PROCESS_COUNT; i++) {
-        m_pid pid = 2000 + i;
-        v_address addr = alloc_for_process(pid, (i%3 + 1)*PAGE_SIZE);
-        if (addr != FULL) {
-            pids.push_back(pid);
-            std::cout << "Process " << pid << " allocated "
-                 << dec << (i%3 +1) << " page(s) at 0x"
-                 << hex << addr << std::endl;
-        }
-    }
-    
-    // 资源清理
-    std::cout << "\n[Cleanup] Releasing all allocated resources..." << std::endl;
-    for (auto pid : pids) free_process_memory(pid);
-    
-}
-
-void test_address_translation(){
-    // 初始化内存系统
-    init_memory();
-    
-    // 测试数据大小（1页）
-    m_size size = PAGE_SIZE;
-    
-    // 进程ID
-    m_pid pid = 100;
-    
-    // 分配虚拟内存
-    v_address v_addr = alloc_for_process(pid, size);
-    if (v_addr == FULL) {
-        std::cerr << "Failed to allocate virtual memory" << std::endl;
-        return;
-    }
-    
-    std::cout << "Virtual address allocated: 0x" << std::hex << v_addr << std::dec << std::endl;
-    
-    // 获取虚拟页号
-    page v_page_num = v_addr / PAGE_SIZE;
-    std::cout << "Virtual page number: " << static_cast<int>(v_page_num) << std::endl;
-    
-    // 获取页表项
-    PageTableItem& pt = page_table[v_page_num];
-    
-    // 等待页面被加载到内存（在实际系统中可能需要处理缺页中断）
-    // 这里因为alloc_for_process已经分配了物理页，所以可以直接访问
-    
-    // 获取物理页号
-    p_address p_page_num = pt.p_id;
-    std::cout << "Physical page number: " << static_cast<int>(p_page_num) << std::endl;
-    
-    // 计算物理地址 
-    p_address calculated_p_addr = pt.p_id * PAGE_SIZE + (v_addr % PAGE_SIZE);
-    
-    // 输出结果
-    std::cout << "\n[Address Translation Result]" << std::endl;
-    std::cout << "Virtual Address:  0x" << std::hex << v_addr << std::dec << std::endl;
-    std::cout << "Virtual Page:     " << static_cast<int>(v_page_num) << std::endl;
-    std::cout << "Physical Page:    " << static_cast<int>(p_page_num) << std::endl;
-    std::cout << "Page Offset:      0x" << std::hex << (v_addr % PAGE_SIZE) << std::dec << std::endl;
-    std::cout << "Calculated PA:    0x" << std::hex << calculated_p_addr << std::dec << std::endl;
-    // 清理
-    free_process_memory(pid);
-    std::cout << "\nTest completed and memory freed" << std::endl;
-}
-void test_memory_swap() {
-    std::cout << "\n=== Testing Memory Swap (Page In from Disk) ===" << std::endl;
-    init_memory();
-
-    // 模拟分配虚拟内存
-    m_pid pid = 1;
-    v_address addr = alloc_for_process(pid, 8192);
-    std::cout << "Process 1 allocated virtual memory at: " << addr << std::endl;
-
-    // 模拟写入数据到虚拟内存
-    string testData = "Hello, this is a test data for page swap!";
-    for (size_t i = 0; i < testData.size(); ++i) {
-        write_memory(static_cast<atom_data>(testData[i]), addr + i, pid);
-    }
-    std::cout << "Data written to virtual memory: " << testData << std::endl;
-
-    // 模拟页面换出到磁盘
-    page v_page_num = addr / PAGE_SIZE;
-    PageTableItem& pt = page_table[v_page_num];
-    if (pt.in_memory) {
-        memcpy(&disk[v_page_num * PAGE_SIZE], &memory[pt.p_id * PAGE_SIZE], PAGE_SIZE);
-        pt.in_memory = false;
-        p_page[pt.p_id / 8] &= ~(1 << (pt.p_id % 8));
-        std::cout << "[DEBUG] Page out: Virtual page " << v_page_num << " -> Disk" << std::endl;
-    }
-
-    // 模拟页面换入
-    int result = page_in(addr, pid);
-    if (result == 0) {
-        std::cout << "Page in successful" << std::endl;
-
-        // 验证换入的数据
-        string recoveredData;
-        recoveredData.resize(testData.size());
-        for (size_t i = 0; i < testData.size(); ++i) {
-            atom_data data;
-            read_memory(&data, addr + i, pid);
-            recoveredData[i] = static_cast<char>(data);
-        }
-        std::cout << "Recovered data from memory: " << recoveredData << std::endl;
-        std::cout << "Data verification: " << (recoveredData == testData ? "Passed" : "Failed") << std::endl;
-    } else {
-        cerr << "Page in failed" << std::endl;
-    }
-
-    // 清理
-    free_process_memory(pid);
-}
-void test_filesystem1() {
-    std::cout << "\n=== Testing File System ===" << std::endl;
-    //FileSystem fs(256, 4096);
-
-    // 测试1：基础读写测试
-    std::cout << "\n[Test 1] Basic read/write:" << std::endl;
-    fs.createFile("/", "data.bin", FILE_TYPE, 1024);
-    
-    // 写入精确大小的数据
-    string testData(1024, 'A');  // 1024字节全'A'
-    fs.writeFile("/", "data.bin", testData);
-    // 读取验证
-    string content = fs.readFile("/", "data.bin");
-    std::cout << "File content: " << content << std::endl;
-    std::cout << "Data verification: " 
-         << (content == testData ? "Passed" : "Failed") 
-         << std::endl;
-
-    // 测试2：覆盖写入测试
-    std::cout << "\n[Test 2] Overwrite test:" << std::endl;
-    string newData(512, 'B');
-    fs.writeFile("/", "data.bin", newData);
-    
-    content = fs.readFile("/", "data.bin");
-    std::cout << "Overwrite result: "
-         << (content.substr(0,512) == string(512, 'B') && 
-             content.substr(512) == string(512, 'A') ? "Passed" : "Failed")
-         << std::endl;
-    
-    // 输出data.bin内容
-    std::cout << "File content: " << content << std::endl;
-
-    // 测试3：边界条件测试
-    std::cout << "\n[Test 3] Boundary condition test:" << std::endl;
-    // 创建正好占满一个块的文件（4096字节）
-    fs.createFile("/", "4kfile", FILE_TYPE, 4096);
-    string fullBlock(4096, 'C');
-    int writeResult = fs.writeFile("/", "4kfile", fullBlock);
-    std::cout << "Full block write: " 
-         << (writeResult == 0 ? "Success" : "Failed") 
-         << std::endl;
-
-    // 测试4：大文件测试
-    std::cout << "\n[Test 4] Large file test:" << std::endl;
-    const int LARGE_SIZE = 8 * 4096;  // 8个块
-    fs.createFile("/", "large.bin", FILE_TYPE, LARGE_SIZE);
-    
-    string largeData(LARGE_SIZE, 'D');
-    writeResult = fs.writeFile("/", "large.bin", largeData);
-    std::cout << "Large file write: "
-         << (writeResult == 0 ? "Success" : "Failed") 
-         << " (" << LARGE_SIZE << " bytes)" 
-         << std::endl;
-
-    // 测试5：空间回收验证
-    std::cout << "\n[Test 5] Space reclamation:" << std::endl;
-    fs.deleteFile("/", "data.bin");
-    fs.deleteFile("/", "4kfile");
-    std::cout << "Deleted two files" << std::endl;
-    
-    // 验证空间是否回收
-    std::cout << "Final free space list:" << std::endl;
-    fs.printFreeSpaceList();
-}
-
-void test_directory_operations() {
-    FileSystem fs(1024, 4096);
-
-    // 创建目录
-    fs.createDirectory("/", "documents");
-    fs.createDirectory("/", "121");
-    fs.createDirectory("/121", "d");
-    fs.printDirectory("/"); // 应显示空目录
-
-    // 创建文件（仅一次）
-    int createResult = fs.createFile("/documents", "notes.txt", FILE_TYPE, 1024);
-    if (createResult == 0) {
-        fs.printDirectory("/documents");
-    } else {
-        cerr << "文件创建失败，错误码: " << createResult << std::endl;
-        return; // 提前终止以排查问题
-    }
-
-    // 创建子目录
-    fs.createDirectory("/documents", "projects");
-    fs.createDirectory("/documents", "1111");
-    fs.printDirectory("/documents"); // 应显示文件和目录
-
-    // 写入文件内容
-    fs.writeFile("/documents", "notes.txt", "Project meeting notes...");
-    int writeResult = fs.writeFile("/documents", "notes.txt", "Project meeting notes...");
-    if (writeResult == 0) {
-        std::cout << "\n文件写入成功";
-        
-        // 读取并展示内容
-        std::cout << "\n文件内容预览：";
-        string content = fs.readFile("/documents", "notes.txt");
-        std::cout << "\n--------------------------------------------------";
-        std::cout << "\n" << content.substr(0, 100) << "..." << std::endl; // 显示前100字符
-        std::cout << "--------------------------------------------------\n";
-    } else {
-        std::cout << "\n文件写入失败";
-    }
-    
-    // 递归删除
-    std::cout << "\nDeleting /documents recursively..." << std::endl;
-    
-    //删除子目录
-    fs.deleteDirectoryRecursive("/documents/projects");
-    // 最终验证前尝试删除所有子项
-    std::cout << "\n[Cleanup] 清理根目录下的所有子目录..." << std::endl;
-    std::vector<std::string> rootEntries = fs.listDirectory("/");
-    for (const auto& entry : rootEntries) {
-        if (entry.back() == '/') { // 如果是目录
-            std::string dirName = entry.substr(0, entry.size() - 1); // 去掉末尾 '/'
-            fs.deleteDirectoryRecursive("/" + dirName);
-        } else {
-            fs.deleteFile("/", entry);
-        }
-    }
-
-    // 再次打印根目录确认为空
-    std::cout << "\n[INFO] 删除完成后根目录内容:" << std::endl;
-    fs.printDirectory("/"); 
-}
-
-void test_filesystem2() {
-    std::cout << "\n=== Testing File System ===" << std::endl;
-
-    std::cout << "[INFO] DISK_SIZE = " << DISK_SIZE << " bytes\n";
-    std::cout << "[INFO] sizeof(disk) = " << sizeof(disk) << " bytes\n";
-
-    FileSystem fs(256, 4096);
-
-    std::cout << "[INFO] Created file system with "
-              << fs.getTotalBlocks() << " blocks of "
-              << fs.getBlockSize() << " bytes each.\n";
-
-    // 测试1：基础读写测试
-    std::cout << "\n[Test 1] Basic read/write:" << std::endl;
-    int createResult = fs.createFile("/", "data.bin", FILE_TYPE, 1024);
-    std::cout << "createFile 返回码: " << createResult << std::endl;
-    if (createResult != 0) {
-        std::cerr << "文件创建失败，错误码: " << createResult << std::endl;
-        return;
-    }
-
-    string testData(1024, 'A');
-    std::cout << "writeFile(\"/\", \"data.bin\") ... ";
-    int writeResult = fs.writeFile("/", "data.bin", testData);
-    std::cout << (writeResult == 0 ? "Success\n" : "Failed\n");
-
-    string content = fs.readFile("/", "data.bin");
-    std::cout << "Read data.bin: " << content.substr(0, 50) << "..." << std::endl;
-}
-
-void test_filesystem_with_memory() {
-    std::cout << "\n=== Testing File System and Memory Collaboration ===" << std::endl;
-
-    // 初始化文件系统和内存管理
-    init_memory();  // 初始化内存模块
-    FileSystem fs(256, 4096);  // 初始化文件系统（256块，每块4096字节）
-
-    // Step 1: 创建目录结构
-    std::cout << "[Step 1] Creating directory structure..." << std::endl;
-    fs.createDirectory("/", "home");
-    fs.createDirectory("/home", "user");
-    fs.createDirectory("/home/user", "docs");
-
-    fs.printDirectory("/");
-    fs.printDirectory("/home/user");
-
-    // Step 2: 创建并写入文件
-    std::cout << "\n[Step 2] Creating and writing to file..." << std::endl;
-    std::string content = "This is a sample text stored in memory and disk.";
-    fs.createFile("/home/user/docs", "sample.txt", FILE_TYPE, content.size());
-    fs.writeFile("/home/user/docs", "sample.txt", content);
-
-    // Step 3: 读取文件并验证
-    std::cout << "\n[Step 3] Reading file from disk..." << std::endl;
-    std::string readContent = fs.readFile("/home/user/docs", "sample.txt");
-    std::cout << "Read content: " << readContent << std::endl;
-
-    if (readContent == content) {
-        std::cout << "[PASS] File content verified successfully." << std::endl;
-    } else {
-        std::cerr << "[FAIL] File content mismatch!" << std::endl;
-    }
-
-    // Step 4: 将文件加载到内存中模拟程序使用
-    std::cout << "\n[Step 4] Loading file into memory for processing..." << std::endl;
-    m_pid pid = 1;
-    v_address mem_addr;
-
-    if (alloc_for_file(content.size(), &mem_addr, pid) != 0) { // 使用 pid=1
-        std::cerr << "[ERROR] Failed to allocate memory for file." << std::endl;
-        return;
-    }
-    std::cout << "Allocated virtual address: 0x" << std::hex << mem_addr << std::dec << std::endl;
-
-    // Step 5: 将文件内容复制到内存
-    p_address phys_addr;
-    int result = translate_address(mem_addr, pid, &phys_addr); // 这里使用相同 pid=1
-    if (result != 0) {
-        std::cerr << "[ERROR] Address translation failed." << std::endl;
-        return;
-    }
-
-    std::cout << "[DEBUG] Physical address: 0x" << std::hex << phys_addr << std::dec << std::endl;
-    memcpy(&memory[phys_addr], readContent.data(), readContent.size());
-
-    // Step 6: 从内存读回数据验证一致性
-    std::string processedData;
-    processedData.resize(readContent.size());
-    memcpy(&processedData[0], &memory[phys_addr], readContent.size());
-
-    std::cout << "Processed data from memory: " << processedData << std::endl;
-    if (processedData == content) {
-        std::cout << "[PASS] Data loaded into memory correctly." << std::endl;
-    } else {
-        std::cerr << "[FAIL] Memory data does not match original content." << std::endl;
-    }
-
-    // Step 7: 页面置换测试
-    std::cout << "\n[Step 5] Testing page replacement..." << std::endl;
-    v_address another_addr = alloc_for_process(2, 8192);
-    std::cout << "Another allocation at: 0x" << std::hex << another_addr << std::dec << std::endl;
-    print_memory_usage();
-
-    // Step 8: 清理资源
-    std::cout << "\n[Cleanup] Releasing all resources..." << std::endl;
-    free_file_memory(mem_addr);
-    fs.deleteFile("/home/user/docs", "sample.txt");
-    fs.deleteDirectoryRecursive("/home");
-
-    std::cout << "[INFO] Final root directory after cleanup:" << std::endl;
-    fs.printDirectory("/");
-}
-
-/*int main() {
-    SetConsoleOutputCP(CP_UTF8);  // 设置控制台输出为 UTF-8 编码
-    //test_memory1();
-    //test_memory2();
-    //test_address_translation();
-    //test_memory_swap();
-    //test_filesystem1();
-    //test_filesystem2();
-    //test_directory_operations();
-    test_filesystem_with_memory();
-    return 0;
-}*/
-
-/*int main() {*/

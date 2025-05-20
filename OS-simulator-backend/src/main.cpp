@@ -36,6 +36,7 @@ void commandHandlerThread() {
     }
 }
 
+
 int main(){
     SetConsoleOutputCP(CP_UTF8);
     //socket初始化
@@ -62,7 +63,6 @@ int main(){
     std::thread cmd_thread(commandHandlerThread);
         cmd_thread.detach();  // 分离线程使其独立运行
 #endif 
-    
     PCB npcb;
     Interrupt_Init(); 
     init_memory();
@@ -76,18 +76,18 @@ int main(){
     //该循环仅用来处理客户端请求以及长期和中期调度
     while(1){
         //处理客户端请求
-        #if SOCKETBEGIN
+        
         //长期调度（取消某些进程申请的内存），创建PCB
         //此处在遍历检查阻塞队列时，如果有设备申请的进程成功申请到设备，要检查其占用时间是否已过，
         //如果已经过了，就将其从阻塞队列中移除，并且去除当前运行指令
         //LongTermScheduler(path, filename);//通过给出进程文件的路径以及文件名，创建进程及其PCB，并为其分配内存，如果没有则直接挂起
-        #endif
         CreatePCB();//给没有pcb的进程创建pcb并添加到挂起队列
         //若内存未满，为没有内存的PCB申请内存
         AllocateMemoryForPCB();
         //execute();
         //中期调度
-       
+        CheckBlockList();
+        //cout<<"blocklist的数量："<<blockList.size()<<endl;
         //MidStageScheduler();//中C 期调度程序
         
 

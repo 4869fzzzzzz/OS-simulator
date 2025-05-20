@@ -1,0 +1,49 @@
+以下为所使用的中断测试内容。中断测试程序支持自行随机测试，以下仅为参考测试方法。
+基础中断产生，处理与优先级排序
+p
+r TIMER
+r DEVICE
+r SOFTWARE
+r SNAPSHOT
+r PAGEFAULT
+r MERROR
+r TIMER
+p
+h
+.
+中断有效位和优先级设置
+s TIMER 3
+s SOFTWARE 4
+s MERROR 2
+uv SNAPSHOT
+p
+r SNAPSHOT
+r SOFTWARE
+r MERROR
+r TIMER
+r MERROR
+r DEVICE
+p
+h
+.
+中断等待队列以及时钟中断
+dt
+v SNAPSHOT
+r SNAPSHOT
+r SNAPSHOT
+p
+et
+p
+h
+.
+关闭时钟中断
+pt
+st
+pt
+p
+p
+e
+h
+.
+
+

@@ -31,20 +31,28 @@ void Interrupt_Init(){ //中断初始化
     |1<<static_cast<int>(InterruptType::MERROR);
 
     InterruptVector Timer(noHandle, static_cast<int>(InterruptType::TIMER));
+    Timer.priority=static_cast<int>(InterruptType::TIMER);
     InterruptVectorTable[static_cast<int>(InterruptType::TIMER)]=Timer;
     InterruptVector mDevice(callDeviceInterrupt, static_cast<int>(InterruptType::DEVICE));
+    mDevice.priority=static_cast<int>(InterruptType::DEVICE);
     InterruptVectorTable[static_cast<int>(InterruptType::DEVICE)]=mDevice;
     InterruptVector Software(noHandle, static_cast<int>(InterruptType::SOFTWARE));
+    Software.priority=static_cast<int>(InterruptType::SOFTWARE);
     InterruptVectorTable[static_cast<int>(InterruptType::SOFTWARE)]=Software;
-    InterruptVector Snapshot(noHandle, static_cast<int>(InterruptType::SNAPSHOT));
+    InterruptVector Snapshot(snapshotSend, static_cast<int>(InterruptType::SNAPSHOT));
+    Snapshot.priority=static_cast<int>(InterruptType::SNAPSHOT);
     InterruptVectorTable[static_cast<int>(InterruptType::SNAPSHOT)]=Snapshot;
     InterruptVector Non_maskable(noHandle, static_cast<int>(InterruptType::NON_MASKABLE));
+    Non_maskable.priority=static_cast<int>(InterruptType::NON_MASKABLE);
     InterruptVectorTable[static_cast<int>(InterruptType::NON_MASKABLE)]=Non_maskable;
     InterruptVector PageFault(Pagefault, static_cast<int>(InterruptType::PAGEFAULT));
+    PageFault.priority=static_cast<int>(InterruptType::PAGEFAULT);
     InterruptVectorTable[static_cast<int>(InterruptType::PAGEFAULT)]=PageFault;
     InterruptVector Test(noHandle, static_cast<int>(InterruptType::TEST));
+    Test.priority=static_cast<int>(InterruptType::TEST);
     InterruptVectorTable[static_cast<int>(InterruptType::TEST)]=Test;
     InterruptVector Error(errorHandle, static_cast<int>(InterruptType::MERROR));
+    Error.priority=static_cast<int>(InterruptType::MERROR);
     InterruptVectorTable[static_cast<int>(InterruptType::MERROR)]=Error;
     //清空中断处理队列
     while(!InterruptQueue.empty())
@@ -67,6 +75,10 @@ void errorHandle(int v1,int v2,std::string v3,int* v4, int v5){
 }
 //中断产生
 void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int v5){
+    //检测有效位
+    if(!InterruptTool::isValid(t)){
+        return;
+    }
     InterruptSystemData::incrementCount(t);
     Interrupt itp(t, v1, v2, v3, v4, v5);
     if(handleFlag.load()){
@@ -79,12 +91,6 @@ void raiseInterrupt(InterruptType t, int v1, int v2, std::string v3,int* v4,int 
 }
 //中断处理
 void handleInterrupt(){
-    
-    //interrupt_handling_cpus.store(interrupt_handling_cpus.load()+1);
-    // 等待另一个CPU也进入中断处理
-   /* while (interrupt_handling_cpus.load() < 2) {
-        std::this_thread::yield();
-    }*/
     
     handleFlag.store(1);
     while(!InterruptQueue.empty()) {
@@ -112,8 +118,7 @@ void handleInterrupt(){
         readyInterruptQueue.pop();
     }
     iq.unlock();
-    // 减少处理中断的CPU计数
-    //interrupt_handling_cpus.store(interrupt_handling_cpus.load()-1);
+    
     handleFlag.store(0);
 }
 //工具函数
@@ -229,7 +234,7 @@ time_t get_nowSysTime(){
 
 
 //运行一条指令
-bool RUN(std::string cmd, PCB* current_pcb){
+bool RUN(std::string cmd, PCB* current_pcb,int* pcb_exit_flag){
     std::vector<std::string> scmd;
     cout<<"RUNNING PROCESS:pid:"<<current_pcb->pid<<"instruction:"<<cmd<<endl;
     CmdSplit(cmd,scmd);
@@ -275,8 +280,9 @@ bool RUN(std::string cmd, PCB* current_pcb){
                //产生设备中断，后续补充
                 int devicetype=stoi(scmd[2]);
                 int needtime=stoi(scmd[3]);
-                
-                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->start_block_time,needtime*10);
+                current_pcb->need_block_time=needtime;
+                current_pcb->start_block_time=0;
+                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->start_block_time,needtime/10);
                 return false;
             }
 
@@ -288,7 +294,9 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 //产生设备中断，后续补充
                 int devicetype=stoi(scmd[2]);
                 int needtime=stoi(scmd[3]);
-                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->start_block_time,needtime*10);
+                current_pcb->need_block_time=needtime;
+                current_pcb->start_block_time=0;
+                raiseInterrupt(InterruptType::DEVICE,current_pcb->pid,devicetype,"",&current_pcb->start_block_time,needtime/10);
                 return false;
             }
 
@@ -299,7 +307,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
             }else{
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
-                fs.readFile(cata, filename);
+                cout<<"READFILE:"<<fs.readFile(cata, filename)<<endl;;
                 return true;
             }
 
@@ -312,7 +320,7 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 std::string cata=scmd[2];
                 std::string filename=scmd[3];
                 std::string content=scmd[4];
-                fs.writeFile(cata, filename, content);
+                cout<<"WRITEFILE:"<<fs.writeFile(cata, filename, content)<<endl;
                 return true;
             }
 
@@ -356,9 +364,13 @@ bool RUN(std::string cmd, PCB* current_pcb){
                     // 更新进程状态
                     found->state = BLOCK;
                     found->blocktype = SYSTEMB;
-                    found->start_block_time = time_cnt.load();
+                    
                     
                     // 使用互斥锁保护阻塞队列操作
+                    auto pcb_it = std::next(PCBList.begin(),found->pid - 1);
+                    if(pcb_it!=PCBList.end()&&pcb_it->pid==found->pid) {
+                        pcb_it->state=BLOCK;
+                    }
                     std::lock_guard<std::mutex> lock(blockList_mutex);
                     blockList.push_back(*found);
                     blockList_mutex.unlock();
@@ -413,6 +425,10 @@ bool RUN(std::string cmd, PCB* current_pcb){
                     if (isFound) {
                         if (page_in(found.address, found.pid)) {
                             std::cout << "[INFO] Successfully allocated memory for process " << tpid << std::endl;
+                            auto pcb_it = std::next(PCBList.begin(),found.pid - 1);
+                            if(pcb_it!=PCBList.end()&&pcb_it->pid==found.pid) {
+                                pcb_it->state=READY;
+                            }
                         } else {
                             std::cout << "[ERROR] Failed to allocate memory for process " << tpid << std::endl;
                             std::lock_guard<std::mutex> lock(suspendList_mutex);
@@ -428,6 +444,10 @@ bool RUN(std::string cmd, PCB* current_pcb){
                     found.state = READY;
                     found.blocktype = NOTBLOCK;
                     found.start_block_time = 0;
+                    auto pcb_it = std::next(PCBList.begin(),found.pid - 1);
+                    if(pcb_it!=PCBList.end()&&pcb_it->pid==found.pid) {
+                        pcb_it->state=READY;
+                    }
                     ready(found);
                     std::cout << "[INFO] Process " << tpid << " has been waked up successfully" << std::endl;
                     return true;
@@ -436,7 +456,17 @@ bool RUN(std::string cmd, PCB* current_pcb){
                 }
                 return true;
             }
-        }else{
+        }
+        else if(cmdType=="ESC")
+        {
+            *pcb_exit_flag=0;
+            auto pcb_it = std::next(PCBList.begin(),current_pcb->pid - 1);
+            if(pcb_it!=PCBList.end()&&pcb_it->pid==current_pcb->pid) {
+                pcb_it->state=DEAD;
+            }
+            cout<<"read instruction end!!!"<<endl;
+        }
+        else{
             raiseInterrupt(InterruptType::MERROR,0,0,"",nullptr,0);
             return true;
         }
@@ -491,8 +521,13 @@ void ClientCmdSplit(const std::string& cmd, std::vector<std::string>& scmd) {
         
         // 读取剩余所有内容作为最后一个词
         std::string remaining;
+        std::string add_str;
         std::getline(iss, remaining);
-        
+        while(std::getline(iss,add_str))
+        {
+            remaining+="\n";
+            remaining+=add_str;
+        }
         if (!remaining.empty()) {
             // 删除开头的空格
             remaining = remaining.substr(remaining.find_first_not_of(" \t"));
@@ -674,8 +709,11 @@ bool handleClientCmd(std::string cmd, std::string& result) {
             // 更新进程状态
             found->state = BLOCK;
             found->blocktype = SYSTEMB;
-            found->start_block_time = time_cnt.load();
             
+            auto pcb_it = std::next(PCBList.begin(),found->pid - 1);
+            if(pcb_it!=PCBList.end()&&pcb_it->pid==found->pid) {
+                pcb_it->state=BLOCK;
+            }
             // 使用互斥锁保护阻塞队列操作
             std::lock_guard<std::mutex> lock(blockList_mutex);
             blockList.push_back(*found);
@@ -732,6 +770,10 @@ bool handleClientCmd(std::string cmd, std::string& result) {
             // 如果是挂起进程，需要重新分配内存
             if (isFound) {
                 if (page_in(found.address, found.pid)) {
+                    auto pcb_it = std::next(PCBList.begin(),found.pid - 1);
+                    if(pcb_it!=PCBList.end()&&pcb_it->pid==found.pid) {
+                        pcb_it->state=READY;
+                    }
                     std::cout << "[INFO] Successfully allocated memory for process " << tpid << std::endl;
                 } else {
                     std::cout << "[ERROR] Failed to allocate memory for process " << tpid << std::endl;
@@ -749,6 +791,10 @@ bool handleClientCmd(std::string cmd, std::string& result) {
             found.state = READY;
             found.blocktype = NOTBLOCK;
             found.start_block_time = 0;
+            auto pcb_it = std::next(PCBList.begin(),found.pid - 1);
+            if(pcb_it!=PCBList.end()&&pcb_it->pid==found.pid) {
+                pcb_it->state=READY;
+            }
             ready(found);
             result = "[INFO] Process " + to_string(tpid) + " has been waked up successfully";
             std::cout << result << std::endl;
@@ -813,14 +859,19 @@ void cpu_worker(CPU& cpu) {
         // 处理当前进程
         if (current_pcb != nullptr) {
             std::cout<<"running1"<<std::endl;
+            auto pcb_it = std::next(PCBList.begin(),current_pcb->pid - 1);
+            if(pcb_it!=PCBList.end()&&pcb_it->pid==current_pcb->pid) {
+                pcb_it->cpu_num=cpu.id;
+            }
             if (current_pcb->has_instruction()) {
                 std::cout<<"running2"<<std::endl;
                 if (current_pcb->current_instruction_time == 1) {
                     std::cout<<"running3"<<std::endl;
-                    if(!RUN(current_pcb->get_current_instruction(),current_pcb)){
+                    if(!RUN(current_pcb->get_current_instruction(),current_pcb,&pcb_exist_flag)){
                         //设备申请指令
                         current_pcb->state=BLOCK;
                         current_pcb->blocktype=DEVICEB;
+                        current_pcb->nodevice_time=-1;
                         std::lock_guard<std::mutex> lock(blockList_mutex);
                         blockList.push_back(*current_pcb);
                         blockList_mutex.unlock();   
@@ -833,75 +884,77 @@ void cpu_worker(CPU& cpu) {
                 } else {
                     current_pcb->current_instruction_time--;
                 }
-        
-            } else {
-                std::cout<<"running6"<<std::endl;
-                // 从内存读取指令
-                char instruction_buffer[256] = {0};
-                size_t bytes_read = 0;
-                int flag = read_instruction(instruction_buffer, sizeof(instruction_buffer), 
-                    current_pcb->address, current_pcb->pid, &bytes_read);
-                cout<<"flag:"<<flag<<endl;
-                if (bytes_read > 0) {
-                    // 解析指令
-                    std::string newinstruction(instruction_buffer);
-                    current_pcb->instruction = newinstruction;
-                    cout<<current_pcb->pid<<"读取到指令:"<<current_pcb->instruction<<endl;
-        
-                    // 更新程序计数器
-                    current_pcb->address += bytes_read;
-        
-                    // 分析指令并分配时间片
-                    std::vector<std::string> parts;
-                    CmdSplit(newinstruction, parts);
-                    if (parts.size() >= 2) {
-                        try {
-                            current_pcb->current_instruction_time = std::stoi(parts[1]);
-                        } catch (const std::exception& e) {
-                            current_pcb->current_instruction_time = 1; // 默认时间片
-                        }
-                    } else {
-                        current_pcb->current_instruction_time = 1; // 默认时间片
-                    }
-                }
-
-                if (flag==0) {//未运行完，读取命令成功
-                    //这里的逻辑已经实现了RR，短期调度只需要调整队列内部顺序即可
-                    // 进程继续执行，重新加入就绪队列
-                    cout<<"未运行完，读取指令成功"<<endl;
-                }else if (flag==-1){//缺页
-                    raiseInterrupt(InterruptType::PAGEFAULT, current_pcb->pid,current_pcb->address,"",nullptr,0);
-                    
-                }else{//进程已经运行完毕
-                    // 释放当前进程资源
-                    pcb_exist_flag=0;
-                    
-                }
-                
-            }
-            if(pcb_exist_flag) {
-                std::lock_guard<std::mutex> lock(ready_list_mutex);
-                
-                readyList0.push_back(std::move(*current_pcb));
-                cout<<"将pcb恢复到readylist"<<readyList0.size()<<endl;
-                //delete current_pcb;  // 释放动态分配的内存
-                current_pcb = nullptr;
-                ready_list_mutex.unlock();
-            }else{
-                cout<<"pcb被删除或移出"<<endl;
-                delete current_pcb;
-                current_pcb = nullptr;
             }
             
-            cpu.busy = false;
-            cpu.running_process = nullptr;
+            // 从内存读取指令
+            char instruction_buffer[256] = {0};
+            size_t bytes_read = 0;
+            int flag = read_instruction(instruction_buffer, sizeof(instruction_buffer), 
+                current_pcb->address, current_pcb->pid, &bytes_read);
+            cout<<"flag:"<<flag<<endl;
+            
+            if (flag == -2) { // 文件结束
+                std::cout << "进程 " << current_pcb->pid << " 执行完毕" << std::endl;
+                pcb_exist_flag = 0;
+                auto pcb_it = std::next(PCBList.begin(), current_pcb->pid - 1);
+                if(pcb_it != PCBList.end() && pcb_it->pid == current_pcb->pid) {
+                    pcb_it->state = DEAD;
+                }
+                delete current_pcb;
+                current_pcb = nullptr;
+                cpu.busy = false;
+                cpu.running_process = nullptr;
+                continue;
+            }
+            
+            if (bytes_read > 0) {
+                // 解析指令
+                std::string newinstruction(instruction_buffer);
+                current_pcb->instruction = newinstruction;
+                cout<<current_pcb->pid<<"读取到指令:"<<current_pcb->instruction<<endl;
+
+                // 更新程序计数器
+                current_pcb->address += bytes_read;
+                std::cout << "[DEBUG] Current address: 0x" << std::hex << current_pcb->address << std::dec << std::endl;
+
+                // 分析指令并分配时间片
+                std::vector<std::string> parts;
+                CmdSplit(newinstruction, parts);
+                if (parts.size() >= 2) {
+                    try {
+                        current_pcb->current_instruction_time = std::stoi(parts[1]);
+                    } catch (const std::exception& e) {
+                        current_pcb->current_instruction_time = 1; // 默认时间片
+                    }
+                } else {
+                    current_pcb->current_instruction_time = 1; // 默认时间片
+                }
+            }
+
+            if (flag == 0) { // 未运行完，读取命令成功
+                cout<<"未运行完，读取指令成功"<<endl;
+            } else if (flag == -1) { // 缺页
+                raiseInterrupt(InterruptType::PAGEFAULT, current_pcb->pid, current_pcb->address, "", nullptr, 0);
+            }
         }
+        
+        if(pcb_exist_flag && current_pcb != nullptr) {
+            std::lock_guard<std::mutex> lock(ready_list_mutex);
+            readyList0.push_back(std::move(*current_pcb));
+            cout<<"将pcb恢复到readylist"<<readyList0.size()<<endl;
+            delete current_pcb;
+            current_pcb = nullptr;
+            ready_list_mutex.unlock();
+        }
+        
+        cpu.busy = false;
+        cpu.running_process = nullptr;
         
         // 处理中断
         if (!InterruptQueue.empty()) {
             handleInterrupt();
         }
-       // delay(10);
+       delay(10);
     }
 };
 
@@ -980,25 +1033,19 @@ void snapshotSend(int v1, int v2, std::string v3, int* v4, int v5) {
         snapshot.timer.time_cnt = time_cnt.load();
         
         // 2. 更新进程状态
-        {
-            static ProcessStatusManager processManager;
-            processManager.update();
-            snapshot.process = processManager.getCurrentStatus();
-        }
+        snapshot.process.update();
         
         // 3. 更新中断状态
-        //snapshot.interrupt.update();
+        snapshot.interrupt.update();
 
         // 4. 更新内存状态
         //fillMemoryStatus(snapshot.memory);
 
         // 5. 更新文件状态
-        //fillFilesystemStructure(snapshot.file,fs);
+        fillFilesystemStatus(snapshot.file,fs);
 
         // 6. 更新设备状态
-        /*static DeviceStatusManager deviceStatus;
-        deviceStatus.update();
-        snapshot.device = deviceStatus.getCurrentStatus();*/
+        snapshot.device.Update();
         
         // 7. 使用 AIGC 序列化整个快照对象
         std::string json_obj;

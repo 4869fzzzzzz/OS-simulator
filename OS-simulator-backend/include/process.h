@@ -26,7 +26,7 @@ using namespace std;
 #define USERB 5
 #define DEVICEB 6
 
-#define MAX_APPLY_TIME 10
+
 
 
 #define SCHED_FCFS 0                         
@@ -51,6 +51,9 @@ using namespace std;
 #define MAX_SPCB_SIZE 512
 #define MAX_BPCB_SIZE 256
 #define MAX_RPCB_SIZE 128
+
+#define MAX_APPLY_TIME 5 //最大重新申请次数
+#define SINGE_BLOCK_TIME 50 //单次阻塞时间,单位0.1秒
 
 
 const int MAX_SUSPEND_TIME = 100;
@@ -95,7 +98,8 @@ typedef struct process_struct {
 	v_address next_v;//进程即将读取的字符虚拟地址
 	string position;//进程文件的路径
 
-	int apply_time;
+	int apply_time;//设备申请次数
+    int nodevice_time;//设备申请失败时间
 	int current_instruction_time;
 
 	std::string instruction;//程序段顺序执行命令
@@ -208,18 +212,29 @@ struct ProcessOverviewForUI {
     AIGC_JSON_HELPER_RENAME("total", "running", "blocked", "cpus")
 };
 
+//就绪队列表项
+struct ProcessReadyListItem{
+    std::string name;
+    int pid;
+    int priority;
+    int RR;
+
+    AIGC_JSON_HELPER(name,pid,priority,RR)    
+};
+
 // 完整的进程系统状态
 struct ProcessSystemStatusForUI {
     ProcessOverviewForUI overview;
     std::vector<ProcessTableItemForUI> process_table;
+    std::vector<ProcessReadyListItem> ready_list;
 
-    AIGC_JSON_HELPER(overview, process_table)
-    AIGC_JSON_HELPER_RENAME("overview", "processes")
+    AIGC_JSON_HELPER(overview, process_table, ready_list)
+    AIGC_JSON_HELPER_RENAME("overview", "processes","ready_list")
 };
-
 class ProcessStatusManager {
 public:
     ProcessSystemStatusForUI current_status;
+    AIGC_JSON_HELPER(current_status)
     std::atomic<bool> need_update{true};
 
     ProcessStatusManager() = default;

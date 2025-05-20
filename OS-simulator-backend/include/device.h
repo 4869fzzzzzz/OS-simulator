@@ -1,6 +1,5 @@
 #pragma once
 #include "./headfile.h"
-#include "./interrupt.h"
 
 enum class DeviceType {
     Disk=0,
@@ -36,15 +35,14 @@ public:
     void disable() { enabled = false; }
     void triggerInterrupt() { hasInterrupt = true; }
     void clearInterrupt() { hasInterrupt = false; }
-     int getUsingPid() const { return using_pid; }
+    int getUsingPid() const { return using_pid; }
     size_t getMemoryAddress() const { return memory_address; }
     //long long getTotalUseTime() const { return total_use_time.load(); }
     //int getUseCount() const { return use_count.load(); }
     
     void setUsingPid(int pid) { 
-        using_pid = pid; 
-        if (pid != -1) {
-            //use_count.fetch_add(1);
+        if (pid >0) {
+            using_pid = pid; 
         }
     }
     void setMemoryAddress(size_t addr) { memory_address = addr; }
@@ -124,11 +122,52 @@ struct DeviceOverviewForUI {
 
 // 完整的设备系统状态
 class DeviceSystemStatusForUI {
-    DeviceOverviewForUI overview;
-    std::vector<DeviceStatusItemForUI> device_table;
-    
-    AIGC_JSON_HELPER(overview, device_table)
-    AIGC_JSON_HELPER_RENAME("overview", "devices")
+    public:
+        DeviceOverviewForUI overview;
+        std::vector<DeviceStatusItemForUI> device_table;
+        
+        AIGC_JSON_HELPER(overview, device_table)
+        AIGC_JSON_HELPER_RENAME("overview", "devices")
+
+        void Update() {
+            const auto& deviceList = manager.getDevices();  // 来自外部定义的 DeviceManager
+            device_table.clear();
+
+            overview.total_devices = deviceList.size();
+            overview.used_devices = 0;
+            overview.total_use_time = 0; // 目前未使用，保留字段
+            overview.total_use_count = 0;
+
+            for (const auto& devPtr : deviceList) {
+                if (!devPtr) continue;
+
+                DeviceStatusItemForUI item;
+                item.device_id = devPtr->getId();
+                item.name = devPtr->getName();
+                
+                // 将 DeviceType 枚举转为字符串类型
+                switch (devPtr->getType()) {
+                    case DeviceType::Disk: item.type = "Disk"; break;
+                    case DeviceType::Printer: item.type = "Printer"; break;
+                    case DeviceType::Keyboard: item.type = "Keyboard"; break;
+                    case DeviceType::NetworkCard: item.type = "NetworkCard"; break;
+                    case DeviceType::Other: item.type = "Other"; break;
+                }
+
+                item.is_occupied = devPtr->isEnabled();
+                item.using_pid = devPtr->getUsingPid();
+                item.memory_address = devPtr->getMemoryAddress();
+
+                if (item.is_occupied) {
+                    overview.used_devices++;
+                }
+
+                device_table.push_back(item);
+            }
+
+            overview.available_devices = overview.total_devices - overview.used_devices;
+        }
+
 };
 // ...existing code...
 
@@ -208,5 +247,3 @@ private:
 void Init_Device();
 void createDevices(DeviceManager& manager);
 void callDeviceInterrupt(int pcb_id, int type, std::string info,int* flag, int seconds) ;
-
-
